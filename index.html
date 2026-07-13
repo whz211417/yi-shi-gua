@@ -16,25 +16,30 @@
         </a>
         <div class="header-actions">
           <p id="today-date" class="date-stamp" aria-label="今日日期"></p>
-          <button id="menu-open-button" class="menu-open-button" type="button" aria-expanded="false" aria-controls="menu-panel">管理菜单</button>
+          <button id="menu-open-button" class="menu-open-button" type="button" aria-expanded="false" aria-controls="menu-panel">整饬食单</button>
         </div>
       </header>
 
-      <section class="hero" aria-labelledby="page-title">
+      <section class="scroll-hero hero" aria-labelledby="page-title">
         <div class="hero-copy">
-          <p class="eyebrow">一日一食，自有其时</p>
-          <h1 id="page-title">今日吃什么，<br />请报一数。</h1>
-          <p class="intro">以当下的时间、去处与一点直觉，为你落下一餐。</p>
+          <p class="eyebrow">食随其时，味从其心</p>
+          <h1 id="page-title"><span>今日食何</span><span>请报一数</span></h1>
+          <p class="intro">择其时，定其处，拈一数。今朝一餐，便有着落。</p>
         </div>
-        <div class="hexagram-seal" aria-hidden="true">
-          <span></span><span class="broken"></span><span></span><span class="broken"></span><span class="broken"></span><span></span>
-        </div>
+        <aside class="oracle-aside" aria-hidden="true">
+          <div class="hexagram-seal">
+            <span></span><span class="broken"></span><span></span><span class="broken"></span><span class="broken"></span><span></span>
+          </div>
+          <p class="oracle-order">食卦·其一</p>
+          <span class="vermilion-seal">食</span>
+          <span class="cloud-mark"></span>
+        </aside>
       </section>
 
-      <section id="casting" class="casting-panel" aria-labelledby="casting-title">
+      <section id="casting" class="ritual-sheet casting-panel" aria-labelledby="casting-title">
         <div class="section-heading">
           <p class="eyebrow">起一餐卦</p>
-          <h2 id="casting-title">先说说此刻</h2>
+          <h2 id="casting-title">请陈其时</h2>
         </div>
 
         <div class="choice-grid">
@@ -77,15 +82,16 @@
             </div>
             <p id="number-help">请输入 1-64 的整数</p>
           </div>
-          <button id="cast-button" class="cast-button" type="button"><span aria-hidden="true">起</span> 起餐卦</button>
+          <div class="finger-stage" aria-hidden="true"><i></i><i class="broken"></i><i></i><i class="broken"></i><i class="broken"></i><i></i></div>
+          <button id="cast-button" class="cast-button" type="button"><span aria-hidden="true">起</span> 拈数起卦</button>
         </div>
       </section>
 
       <section id="result-card" class="result-card is-empty" aria-labelledby="result-title" aria-live="polite">
-        <div class="result-topline"><span id="result-ordinal">未起卦</span><span class="result-rule"></span><span>今日一餐</span></div>
+        <div class="result-topline"><span id="result-ordinal">未起卦</span><span class="result-rule"></span><span>今朝一餐</span></div>
         <div class="result-empty" id="result-empty">
           <span class="empty-lines" aria-hidden="true"><i></i><i></i><i></i></span>
-          <p>报数之后，餐卦在此显现。</p>
+          <p>数既陈，餐签在此显现。</p>
         </div>
         <div class="result-content" id="result-content" hidden>
           <p id="oracle-title" class="oracle-title"></p>
@@ -94,16 +100,16 @@
           <div class="oracle-line"><span aria-hidden="true"></span><p id="oracle-line"></p></div>
           <p id="meal-reason" class="meal-reason"></p>
           <div class="result-actions">
-            <button id="confirm-button" class="confirm-button" type="button">就吃这个</button>
-            <button id="retry-button" class="retry-button" type="button">换一卦</button>
+            <button id="confirm-button" class="confirm-button" type="button">此餐可取</button>
+            <button id="retry-button" class="retry-button" type="button">再演一卦</button>
           </div>
         </div>
       </section>
 
       <section class="food-log" aria-labelledby="food-log-title">
         <div class="food-log-heading">
-          <p class="eyebrow">今日食录</p>
-          <h2 id="food-log-title">留三处，记三餐</h2>
+          <p class="eyebrow">今朝食录</p>
+          <h2 id="food-log-title">三餐有录</h2>
         </div>
         <ol class="log-slots">
           <li data-slot="早餐"><span>早餐</span><strong>尚未落笔</strong></li>
@@ -121,8 +127,8 @@
       <div class="menu-panel-inner" role="dialog" aria-modal="true" aria-labelledby="menu-panel-title">
         <header class="menu-panel-header">
           <div>
-            <p class="eyebrow">本地菜单库</p>
-            <h2 id="menu-panel-title">管理你的餐品</h2>
+            <p class="eyebrow">本地食单簿</p>
+            <h2 id="menu-panel-title">整饬你的餐品</h2>
             <p id="menu-count" class="menu-count"></p>
           </div>
           <button id="menu-close-button" class="menu-close-button" type="button" aria-label="关闭菜单管理">关闭</button>
