@@ -217,7 +217,7 @@ if (typeof document !== 'undefined') initialiseCastingInterface();
 function initialiseCastingInterface() {
   const $ = (selector) => document.querySelector(selector);
   const numberInput = $('#number-input'); const randomButton = $('#random-number-button'); const castButton = $('#cast-button');
-  const retryButton = $('#retry-button'); const confirmButton = $('#confirm-button'); const resultCard = $('#result-card');
+  const retryButton = $('#retry-button'); const confirmButton = $('#confirm-button'); const resultCard = $('#result-card'); const fingerStage = $('.finger-stage');
   const resultEmpty = $('#result-empty'); const resultContent = $('#result-content'); const liveRegion = $('#live-region'); const dateStamp = $('#today-date'); const balanceTip = $('#daily-balance-tip');
   const menuOpenButton = $('#menu-open-button'); const menuCloseButton = $('#menu-close-button'); const menuPanel = $('#menu-panel'); const menuList = $('#menu-list');
   const addMealButton = $('#add-meal-button'); const resetMenuButton = $('#reset-menu-button');
@@ -231,6 +231,9 @@ function initialiseCastingInterface() {
   randomButton.addEventListener('click', () => { numberInput.value = String(Math.floor(Math.random() * 64) + 1); numberInput.focus(); });
   castButton.addEventListener('click', () => cast(false)); retryButton.addEventListener('click', () => cast(true)); confirmButton.addEventListener('click', confirmMeal);
   let menuInvoker = null;
+  let casting = false;
+  let castTimers = [];
+  const castElements = [resultCard, fingerStage, numberInput, castButton].filter(Boolean);
   const menuFocusableSelector = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), [href]';
   menuOpenButton.addEventListener('click', () => { menuInvoker = document.activeElement; menuPanel.hidden = false; menuOpenButton.setAttribute('aria-expanded', 'true'); menuCloseButton.focus(); });
   menuCloseButton.addEventListener('click', closeMenu);
@@ -251,6 +254,7 @@ function initialiseCastingInterface() {
   function closeMenu() { menuPanel.hidden = true; menuOpenButton.setAttribute('aria-expanded', 'false'); (menuInvoker || menuOpenButton).focus(); menuInvoker = null; }
   function selectedValue(groupId, fallback) { return document.querySelector(`#${groupId} input:checked`)?.value || fallback; }
   function cast(isRetry) {
+    if (casting) return;
     if (isRetry && state.selected) state.rejectedIds.push(state.selected.id);
     const reportNumber = normaliseNumber(); const mealPeriod = selectedValue('meal-period', '午餐'); const place = selectedValue('place', '在学校'); const weather = selectedValue('weather', '自动以本地日期推演');
     const context = { dateKey: date, mealPeriod, place, weather };
@@ -259,16 +263,39 @@ function initialiseCastingInterface() {
     const recommendation = chooseMeal({ meals: state.menu, ...context, rejectedIds: state.rejectedIds, seed, recent: history });
     if (!recommendation.meal) { state.rejectedIds = []; announce(recommendation.reason); return; }
     state.selected = { ...recommendation.meal, meals: [...recommendation.meal.meals], mealPeriod, reason: recommendation.reason };
-    resultCard.classList.add('is-casting');
+    const reveal = () => showResult(oracleForContext(reportNumber, context), state.selected, reportNumber);
+    if (prefersReducedMotion()) { reveal(); return; }
+    startCasting();
+    scheduleCastPhase('finger', 220);
+    scheduleCastPhase('ink', 620);
+    scheduleCastPhase('seal', 960);
+    castTimers.push(window.setTimeout(() => { reveal(); finishCasting(); }, 1240));
+  }
+  function prefersReducedMotion() {
+    return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+  function startCasting() {
+    casting = true;
     castButton.disabled = true;
     retryButton.disabled = true;
-    window.setTimeout(() => {
-      showResult(oracleForContext(reportNumber, context), state.selected, reportNumber);
-      resultCard.classList.remove('is-casting');
-      castButton.disabled = false;
-      retryButton.disabled = false;
-    }, 680);
+    castElements.forEach((element) => element.classList.add('is-casting'));
+    setCastPhase('count');
   }
+  function scheduleCastPhase(phase, delay) {
+    castTimers.push(window.setTimeout(() => { if (casting) setCastPhase(phase); }, delay));
+  }
+  function setCastPhase(phase) {
+    castElements.forEach((element) => { element.dataset.castPhase = phase; });
+  }
+  function finishCasting() {
+    castTimers.forEach((timer) => window.clearTimeout(timer));
+    castTimers = [];
+    casting = false;
+    castButton.disabled = false;
+    retryButton.disabled = false;
+    castElements.forEach((element) => { element.classList.remove('is-casting'); delete element.dataset.castPhase; });
+  }
+  window.addEventListener('pagehide', finishCasting, { once: true });
   function showResult(oracle, meal, ordinal) {
     $('#result-ordinal').textContent = `第 ${ordinal} 数`; $('#oracle-title').textContent = oracle.title; $('#result-title').textContent = meal.name;
     $('#meal-meta').textContent = `${meal.source} / ${meal.venue}`; $('#oracle-line').textContent = oracle.line; $('#meal-reason').textContent = meal.reason;
