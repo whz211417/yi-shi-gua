@@ -14,7 +14,7 @@ export const STARTER_MEALS = [
   { id: 'cf-fish-rice', name: '清蒸鱼饭加青菜', source: '食堂', venue: '二食堂小炒', meals: ['午餐', '晚餐'], staple: '米饭', protein: '鱼虾', vegetable: '有', flavor: '清淡', enabled: true },
   { id: 'cf-tomato-egg-rice', name: '番茄鸡蛋盖饭加生菜', source: '食堂', venue: '二食堂盖饭', meals: ['午餐', '晚餐'], staple: '米饭', protein: '蛋类', vegetable: '有', flavor: '清淡', enabled: true },
   { id: 'cf-yuxiang-rice', name: '鱼香肉丝饭加青菜', source: '食堂', venue: '一食堂自选', meals: ['午餐', '晚餐'], staple: '米饭', protein: '猪肉', vegetable: '有', flavor: '重口', enabled: true },
-  { id: 'cf-malatang', name: '麻辣烫（蔬菜豆腐版）', source: '食堂', venue: '麻辣烫档', meals: ['午餐', '晚餐'], staple: '粉类', protein: '豆制品', vegetable: '有', flavor: '重口', enabled: true },
+  { id: 'cf-malatang', name: '麻辣烫（粉类蔬菜豆腐版）', source: '食堂', venue: '麻辣烫档', meals: ['午餐', '晚餐'], staple: '粉类', protein: '豆制品', vegetable: '有', flavor: '重口', enabled: true },
   { id: 'cf-tofu-rice', name: '家常豆腐饭加时蔬', source: '食堂', venue: '一食堂自选', meals: ['午餐', '晚餐'], staple: '米饭', protein: '豆制品', vegetable: '有', flavor: '普通', enabled: true },
   { id: 'cf-chicken-noodle', name: '鸡丝汤面加青菜', source: '食堂', venue: '粉面档', meals: ['午餐', '晚餐'], staple: '面食', protein: '鸡肉', vegetable: '有', flavor: '汤类', enabled: true },
   { id: 'cf-eggplant-rice', name: '茄子肉末饭加油麦菜', source: '食堂', venue: '二食堂盖饭', meals: ['午餐', '晚餐'], staple: '米饭', protein: '猪肉', vegetable: '有', flavor: '普通', enabled: true },

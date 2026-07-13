@@ -1,6 +1,13 @@
 import { FOOD_ORACLES, STARTER_MEALS } from './data.js';
 
 const REQUIRED_MEAL_FIELDS = ['id', 'name', 'source', 'venue', 'meals', 'staple', 'protein', 'vegetable', 'flavor', 'enabled'];
+const RECENT_HISTORY_WINDOW = 5;
+const MEAL_PERIODS = new Set(['早餐', '午餐', '晚餐']);
+const VALID_SOURCES = new Set(['食堂', '校外']);
+const VALID_STAPLES = new Set(STARTER_MEALS.map((meal) => meal.staple));
+const VALID_PROTEINS = new Set(STARTER_MEALS.map((meal) => meal.protein));
+const VALID_VEGETABLES = new Set(STARTER_MEALS.map((meal) => meal.vegetable));
+const VALID_FLAVORS = new Set(STARTER_MEALS.map((meal) => meal.flavor));
 
 /** Return a local calendar key without using UTC conversion. */
 export function todayKey(date = new Date()) {
@@ -10,10 +17,10 @@ export function todayKey(date = new Date()) {
 
 /** Restore the editable starter bank when saved menu data is unusable. */
 export function normaliseMenu(menu) {
-  if (!Array.isArray(menu) || menu.length === 0 || !menu.every(isUsableMeal)) {
-    return STARTER_MEALS;
+  if (!Array.isArray(menu) || menu.length === 0 || !menu.every(isUsableMeal) || !hasUniqueIds(menu)) {
+    return cloneMeals(STARTER_MEALS);
   }
-  return menu;
+  return cloneMeals(menu);
 }
 
 /**
@@ -21,7 +28,9 @@ export function normaliseMenu(menu) {
  * This function is deliberately side-effect-free so UI/persistence code can stay separate.
  */
 export function scoreMeal(meal, context = {}) {
-  const recent = Array.isArray(context.recent) ? context.recent : [];
+  if (!isRecord(meal)) return Number.NEGATIVE_INFINITY;
+  const safeContext = isRecord(context) ? context : {};
+  const recent = normaliseRecent(safeContext.recent);
   const recentTwo = recent.slice(0, 2);
   const latestSeveral = recent.slice(0, 5);
   let score = 100;
@@ -48,7 +57,7 @@ export function scoreMeal(meal, context = {}) {
   if (lastMealWasHeavy && (meal.flavor === '清淡' || meal.flavor === '汤类')) score += 18;
   if (lastMealWasHeavy && isHeavy(meal.flavor)) score -= 16;
 
-  if (context.mealPeriod === '早餐' && meal.protein !== '无明确蛋白') score += 4;
+  if (safeContext.mealPeriod === '早餐' && meal.protein !== '无明确蛋白') score += 4;
   return score;
 }
 
@@ -58,13 +67,15 @@ export function scoreMeal(meal, context = {}) {
  * with their repeat penalties retained and reports `relaxed: true`.
  */
 export function chooseMeal(context = {}) {
-  const meals = normaliseMenu(context.meals);
-  const rejectedIds = new Set(Array.isArray(context.rejectedIds) ? context.rejectedIds : []);
+  const safeContext = isRecord(context) ? context : {};
+  const meals = normaliseMenu(safeContext.meals);
+  const recent = normaliseRecent(safeContext.recent);
+  const rejectedIds = new Set(Array.isArray(safeContext.rejectedIds) ? safeContext.rejectedIds : []);
   const eligible = meals.filter((meal) => (
     meal.enabled !== false
     && Array.isArray(meal.meals)
-    && meal.meals.includes(context.mealPeriod)
-    && matchesPlace(meal, context.place)
+    && meal.meals.includes(safeContext.mealPeriod)
+    && matchesPlace(meal, safeContext.place)
     && !rejectedIds.has(meal.id)
   ));
 
@@ -72,21 +83,21 @@ export function chooseMeal(context = {}) {
     return { meal: null, score: null, reason: '当前条件下没有可用餐品，请切换地点、餐别或调整菜单库。', relaxed: false };
   }
 
-  const recentTwo = (Array.isArray(context.recent) ? context.recent : []).slice(0, 2);
+  const recentTwo = recent.slice(0, 2);
   const nonRepeating = eligible.filter((meal) => !recentTwo.some((record) => repeatsCore(record, meal)));
   const candidates = nonRepeating.length > 0 ? nonRepeating : eligible;
   const relaxed = nonRepeating.length === 0;
   const ranked = candidates.map((meal) => ({
     meal,
-    score: scoreMeal(meal, context),
-    tie: seededTieBreak(context.seed, meal.id),
+    score: scoreMeal(meal, { ...safeContext, recent }),
+    tie: seededTieBreak(safeContext.seed, meal.id),
   })).sort((a, b) => b.score - a.score || b.tie - a.tie || a.meal.id.localeCompare(b.meal.id));
   const selected = ranked[0];
 
   return {
     meal: selected.meal,
     score: selected.score,
-    reason: recommendationReason(selected.meal, context, relaxed),
+    reason: recommendationReason(selected.meal, { ...safeContext, recent }, relaxed),
     relaxed,
   };
 }
@@ -100,11 +111,39 @@ export function oracleFor(seed, dateKey = '', mealPeriod = '') {
 }
 
 function isUsableMeal(meal) {
-  return meal && typeof meal === 'object'
+  return isRecord(meal)
     && REQUIRED_MEAL_FIELDS.every((field) => Object.hasOwn(meal, field))
-    && typeof meal.id === 'string' && meal.id.trim()
-    && typeof meal.name === 'string' && meal.name.trim()
-    && Array.isArray(meal.meals) && meal.meals.length > 0;
+    && hasText(meal.id)
+    && hasText(meal.name)
+    && VALID_SOURCES.has(meal.source)
+    && hasText(meal.venue)
+    && Array.isArray(meal.meals) && meal.meals.length > 0 && meal.meals.every((period) => MEAL_PERIODS.has(period))
+    && VALID_STAPLES.has(meal.staple)
+    && VALID_PROTEINS.has(meal.protein)
+    && VALID_VEGETABLES.has(meal.vegetable)
+    && VALID_FLAVORS.has(meal.flavor)
+    && typeof meal.enabled === 'boolean';
+}
+
+function hasUniqueIds(meals) {
+  return new Set(meals.map((meal) => meal.id)).size === meals.length;
+}
+
+function cloneMeals(meals) {
+  return meals.map((meal) => ({ ...meal, meals: [...meal.meals] }));
+}
+
+function isRecord(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function hasText(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+/** History is newest-first; retain only record-like entries in the newest five stored records. */
+function normaliseRecent(recent) {
+  return Array.isArray(recent) ? recent.slice(0, RECENT_HISTORY_WINDOW).filter(isRecord) : [];
 }
 
 function matchesPlace(meal, place) {
@@ -115,11 +154,12 @@ function matchesPlace(meal, place) {
 }
 
 function repeatsCore(record, meal) {
-  return sameMeal(record, meal) || record.staple === meal.staple || record.protein === meal.protein;
+  return isRecord(record) && (sameMeal(record, meal) || record.staple === meal.staple || record.protein === meal.protein);
 }
 
 function sameMeal(record, meal) {
-  return record.mealId === meal.id || record.id === meal.id || record.name === meal.name;
+  return isRecord(record) && isRecord(meal)
+    && (record.mealId === meal.id || record.id === meal.id || record.name === meal.name);
 }
 
 function isHeavy(flavor) {
@@ -128,7 +168,7 @@ function isHeavy(flavor) {
 
 function countBy(records, key) {
   return records.reduce((counts, record) => {
-    if (record[key]) counts[record[key]] = (counts[record[key]] || 0) + 1;
+    if (isRecord(record) && record[key]) counts[record[key]] = (counts[record[key]] || 0) + 1;
     return counts;
   }, {});
 }
@@ -147,7 +187,7 @@ function hashString(value) {
 }
 
 function recommendationReason(meal, context, relaxed) {
-  const recent = Array.isArray(context.recent) ? context.recent : [];
+  const recent = normaliseRecent(isRecord(context) ? context.recent : []);
   const notes = [];
   if (recent.some((record) => record.vegetable === '无' || record.vegetable === '少') && meal.vegetable === '有') notes.push('补一份蔬菜');
   if (recent.slice(0, 2).some((record) => isHeavy(record.flavor)) && (meal.flavor === '清淡' || meal.flavor === '汤类')) notes.push('换成较清爽的口味');

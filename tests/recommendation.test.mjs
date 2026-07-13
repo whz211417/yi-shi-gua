@@ -67,6 +67,33 @@ test('chooseMeal favors vegetables after a vegetable-poor meal', () => {
   assert.equal(chooseMeal(context).meal.id, 'has-veg');
 });
 
+test('recommendation boundaries ignore malformed newest-first history records', () => {
+  const meals = [meal('safe-choice')];
+  const context = {
+    meals,
+    mealPeriod: '午餐',
+    place: '不限',
+    recent: [null, 7, 'not a record', {}, { staple: '米饭' }],
+  };
+
+  assert.doesNotThrow(() => scoreMeal(meals[0], context));
+  assert.doesNotThrow(() => chooseMeal(context));
+  assert.equal(chooseMeal(context).meal.id, 'safe-choice');
+});
+
+test('vegetable compensation only considers the newest five newest-first history records', () => {
+  const hasVegetables = meal('has-vegetables', { vegetable: '有' });
+  const noVegetables = meal('no-vegetables', { vegetable: '无' });
+  const context = {
+    recent: [
+      { protein: '鸡肉' }, { protein: '鸡肉' }, { protein: '鸡肉' },
+      { protein: '鸡肉' }, { protein: '鸡肉' }, { vegetable: '无', protein: '鸡肉' },
+    ],
+  };
+
+  assert.equal(scoreMeal(hasVegetables, context), scoreMeal(noVegetables, context));
+});
+
 test('chooseMeal relaxes only repeat constraints when every valid meal is recently repeated', () => {
   const meals = [meal('only-choice')];
   const result = chooseMeal({
@@ -83,13 +110,61 @@ test('chooseMeal relaxes only repeat constraints when every valid meal is recent
 test('oracleFor is deterministic and maps report numbers into the 64 records', () => {
   assert.deepEqual(oracleFor(64, '2026-07-13', '晚餐'), oracleFor(64, '2026-07-13', '晚餐'));
   assert.equal(oracleFor(64, '2026-07-13', '晚餐').title, FOOD_ORACLES[63].title);
+  assert.equal(oracleFor(0).title, FOOD_ORACLES[63].title);
+  assert.equal(oracleFor(-1).title, FOOD_ORACLES[62].title);
+  assert.deepEqual(oracleFor('not-a-number', '2026-07-13', '晚餐'), oracleFor('not-a-number', '2026-07-13', '晚餐'));
 });
 
-test('normaliseMenu restores defaults for malformed menus and keeps valid editable records', () => {
+test('normaliseMenu restores clean defaults for malformed persisted menus', () => {
   assert.deepEqual(normaliseMenu(null), STARTER_MEALS);
   assert.deepEqual(normaliseMenu([{ name: '' }]), STARTER_MEALS);
+  assert.deepEqual(normaliseMenu([meal('bad-source', { source: null })]), STARTER_MEALS);
+  assert.deepEqual(normaliseMenu([meal('bad-venue', { venue: 7 })]), STARTER_MEALS);
+  assert.deepEqual(normaliseMenu([meal('bad-periods', { meals: ['午餐', 7] })]), STARTER_MEALS);
+  assert.deepEqual(normaliseMenu([meal('empty-periods', { meals: [] })]), STARTER_MEALS);
+  assert.deepEqual(normaliseMenu([meal('bad-protein', { protein: null })]), STARTER_MEALS);
+  assert.deepEqual(normaliseMenu([meal('bad-enabled', { enabled: 'true' })]), STARTER_MEALS);
+  assert.deepEqual(normaliseMenu([meal('duplicate'), meal('duplicate', { name: 'duplicate two' })]), STARTER_MEALS);
+});
+
+test('normaliseMenu clones fallback and accepted records to protect canonical data and callers', () => {
+  const restored = normaliseMenu(null);
+  assert.notEqual(restored, STARTER_MEALS);
+  assert.notEqual(restored[0], STARTER_MEALS[0]);
+  assert.notEqual(restored[0].meals, STARTER_MEALS[0].meals);
+  restored[0].name = 'mutated fallback';
+  restored[0].meals.push('午餐');
+  assert.notEqual(STARTER_MEALS[0].name, 'mutated fallback');
+  assert.equal(STARTER_MEALS[0].meals.includes('午餐'), false);
+
   const custom = meal('custom', { name: '自定义轻食' });
-  assert.deepEqual(normaliseMenu([custom]), [custom]);
+  const normalised = normaliseMenu([custom]);
+  assert.deepEqual(normalised, [custom]);
+  assert.notEqual(normalised, [custom]);
+  assert.notEqual(normalised[0], custom);
+  assert.notEqual(normalised[0].meals, custom.meals);
+  normalised[0].meals.push('晚餐');
+  assert.equal(custom.meals.includes('晚餐'), false);
+});
+
+test('chooseMeal reports no eligible result and resolves identical scores deterministically', () => {
+  assert.deepEqual(chooseMeal({ meals: [meal('lunch-only')], mealPeriod: '早餐', place: '不限' }), {
+    meal: null,
+    score: null,
+    reason: '当前条件下没有可用餐品，请切换地点、餐别或调整菜单库。',
+    relaxed: false,
+  });
+
+  const baseContext = { meals: [meal('one'), meal('two')], mealPeriod: '午餐', place: '不限' };
+  assert.equal(chooseMeal({ ...baseContext, seed: 0 }).meal.id, 'two');
+  assert.equal(chooseMeal({ ...baseContext, seed: 1 }).meal.id, 'one');
+  assert.equal(chooseMeal({ ...baseContext, seed: 0 }).meal.id, chooseMeal({ ...baseContext, seed: 0 }).meal.id);
+});
+
+test('麻辣烫名称明确粉类主食以匹配重复规避元数据', () => {
+  const malatang = STARTER_MEALS.find((meal) => meal.id === 'cf-malatang');
+  assert.equal(malatang.staple, '粉类');
+  assert.match(malatang.name, /粉类/);
 });
 
 test('todayKey formats a local date as an ISO-like day key', () => {
