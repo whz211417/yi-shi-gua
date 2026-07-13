@@ -196,3 +196,94 @@ function recommendationReason(meal, context, relaxed) {
   if (relaxed) notes.push('可选项均与近餐相近，已放宽避重条件');
   return `${meal.name}：${notes.join('；')}。`;
 }
+
+// Browser-only presentation layer. The recommendation functions above remain
+// pure so they can also power future persistence and menu-management screens.
+if (typeof document !== 'undefined') {
+  initialiseCastingInterface();
+}
+
+function initialiseCastingInterface() {
+  const numberInput = document.querySelector('#number-input');
+  const randomButton = document.querySelector('#random-number-button');
+  const castButton = document.querySelector('#cast-button');
+  const retryButton = document.querySelector('#retry-button');
+  const confirmButton = document.querySelector('#confirm-button');
+  const resultCard = document.querySelector('#result-card');
+  const resultEmpty = document.querySelector('#result-empty');
+  const resultContent = document.querySelector('#result-content');
+  const liveRegion = document.querySelector('#live-region');
+  const dateStamp = document.querySelector('#today-date');
+  if (!numberInput || !randomButton || !castButton || !retryButton || !confirmButton || !resultCard || !resultEmpty || !resultContent || !liveRegion || !dateStamp) return;
+
+  const state = { rejectedIds: [], selected: null };
+  const today = new Date();
+  dateStamp.textContent = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' }).format(today);
+
+  const normaliseNumber = () => {
+    const parsed = Number.parseInt(numberInput.value, 10);
+    const value = Number.isFinite(parsed) ? Math.min(64, Math.max(1, parsed)) : 1;
+    numberInput.value = String(value);
+    return value;
+  };
+
+  numberInput.addEventListener('change', normaliseNumber);
+  numberInput.addEventListener('blur', normaliseNumber);
+  randomButton.addEventListener('click', () => {
+    numberInput.value = String(Math.floor(Math.random() * 64) + 1);
+    numberInput.focus();
+  });
+  castButton.addEventListener('click', () => cast(state, false));
+  retryButton.addEventListener('click', () => cast(state, true));
+  confirmButton.addEventListener('click', () => confirmMeal(state));
+
+  function cast(castingState, isRetry) {
+    if (isRetry && castingState.selected) castingState.rejectedIds.push(castingState.selected.id);
+    const seed = normaliseNumber();
+    const mealPeriod = selectedValue('meal-period', '午餐');
+    const place = selectedValue('place', '在学校');
+    const weather = selectedValue('weather', '不考虑');
+    const recommendation = chooseMeal({ mealPeriod, place, weather, rejectedIds: castingState.rejectedIds, seed, recent: [] });
+    if (!recommendation.meal) {
+      castingState.rejectedIds = [];
+      announce(recommendation.reason);
+      return;
+    }
+    castingState.selected = { ...recommendation.meal, mealPeriod, reason: recommendation.reason };
+    showResult(oracleFor(seed, todayKey(today), mealPeriod), castingState.selected, seed);
+  }
+
+  function selectedValue(groupId, fallback) {
+    return document.querySelector(`#${groupId} input:checked`)?.value || fallback;
+  }
+
+  function showResult(oracle, meal, ordinal) {
+    document.querySelector('#result-ordinal').textContent = `第 ${ordinal} 数`;
+    document.querySelector('#oracle-title').textContent = oracle.title;
+    document.querySelector('#result-title').textContent = meal.name;
+    document.querySelector('#meal-meta').textContent = `${meal.source} / ${meal.venue}`;
+    document.querySelector('#oracle-line').textContent = oracle.line;
+    document.querySelector('#meal-reason').textContent = meal.reason;
+    resultCard.classList.remove('is-empty', 'is-revealing');
+    resultEmpty.hidden = true;
+    resultContent.hidden = false;
+    void resultCard.offsetWidth;
+    resultCard.classList.add('is-revealing');
+    announce(`餐卦已显现：${meal.name}，${meal.source}${meal.venue}。`);
+  }
+
+  function confirmMeal(castingState) {
+    if (!castingState.selected) return;
+    const slot = document.querySelector(`.log-slots [data-slot="${castingState.selected.mealPeriod}"] strong`);
+    if (slot) {
+      slot.textContent = castingState.selected.name;
+      slot.parentElement.classList.add('is-filled');
+    }
+    announce(`${castingState.selected.mealPeriod}已记入今日食录：${castingState.selected.name}。`);
+  }
+
+  function announce(message) {
+    liveRegion.textContent = '';
+    window.setTimeout(() => { liveRegion.textContent = message; }, 20);
+  }
+}

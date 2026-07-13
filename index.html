@@ -3,10 +3,116 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>易食卦</title>
+    <meta name="theme-color" content="#151515" />
+    <title>易食卦 - 今日吃什么</title>
+    <link rel="stylesheet" href="./assets/style.css" />
   </head>
   <body>
-    <main><h1>易食卦</h1><p>本地离线用餐抽签器正在筹备中。</p></main>
+    <main class="page-shell">
+      <header class="site-header" aria-label="易食卦">
+        <a class="brand" href="#casting" aria-label="易食卦，返回起卦处">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span>易食卦</span>
+        </a>
+        <p id="today-date" class="date-stamp" aria-label="今日日期"></p>
+      </header>
+
+      <section class="hero" aria-labelledby="page-title">
+        <div class="hero-copy">
+          <p class="eyebrow">一日一食，自有其时</p>
+          <h1 id="page-title">今日吃什么，<br />请报一数。</h1>
+          <p class="intro">以当下的时间、去处与一点直觉，为你落下一餐。</p>
+        </div>
+        <div class="hexagram-seal" aria-hidden="true">
+          <span></span><span class="broken"></span><span></span><span class="broken"></span><span class="broken"></span><span></span>
+        </div>
+      </section>
+
+      <section id="casting" class="casting-panel" aria-labelledby="casting-title">
+        <div class="section-heading">
+          <p class="eyebrow">起一餐卦</p>
+          <h2 id="casting-title">先说说此刻</h2>
+        </div>
+
+        <div class="choice-grid">
+          <fieldset id="meal-period" class="choice-group">
+            <legend>餐别</legend>
+            <div class="segmented-control" role="radiogroup" aria-label="餐别">
+              <label><input type="radio" name="meal-period" value="早餐" /><span>早餐</span></label>
+              <label><input type="radio" name="meal-period" value="午餐" checked /><span>午餐</span></label>
+              <label><input type="radio" name="meal-period" value="晚餐" /><span>晚餐</span></label>
+            </div>
+          </fieldset>
+
+          <fieldset id="place" class="choice-group">
+            <legend>去处</legend>
+            <div class="segmented-control" role="radiogroup" aria-label="去处">
+              <label><input type="radio" name="place" value="在学校" checked /><span>在学校</span></label>
+              <label><input type="radio" name="place" value="校外" /><span>校外</span></label>
+              <label><input type="radio" name="place" value="不想走远" /><span>不想走远</span></label>
+            </div>
+          </fieldset>
+
+          <fieldset id="weather" class="choice-group">
+            <legend>天气</legend>
+            <div class="segmented-control" role="radiogroup" aria-label="天气">
+              <label><input type="radio" name="weather" value="不考虑" checked /><span>不考虑</span></label>
+              <label><input type="radio" name="weather" value="晴热" /><span>晴热</span></label>
+              <label><input type="radio" name="weather" value="下雨" /><span>下雨</span></label>
+              <label><input type="radio" name="weather" value="偏冷" /><span>偏冷</span></label>
+            </div>
+          </fieldset>
+        </div>
+
+        <div class="number-row">
+          <div class="number-field">
+            <label for="number-input">报数</label>
+            <div class="number-input-wrap">
+              <input id="number-input" type="number" min="1" max="64" inputmode="numeric" value="32" aria-describedby="number-help" />
+              <button id="random-number-button" class="random-button" type="button" aria-label="随机生成一至六十四的报数">随机</button>
+            </div>
+            <p id="number-help">请输入 1-64 的整数</p>
+          </div>
+          <button id="cast-button" class="cast-button" type="button"><span aria-hidden="true">起</span> 起餐卦</button>
+        </div>
+      </section>
+
+      <section id="result-card" class="result-card is-empty" aria-labelledby="result-title" aria-live="polite">
+        <div class="result-topline"><span id="result-ordinal">未起卦</span><span class="result-rule"></span><span>今日一餐</span></div>
+        <div class="result-empty" id="result-empty">
+          <span class="empty-lines" aria-hidden="true"><i></i><i></i><i></i></span>
+          <p>报数之后，餐卦在此显现。</p>
+        </div>
+        <div class="result-content" id="result-content" hidden>
+          <p id="oracle-title" class="oracle-title"></p>
+          <h2 id="result-title"></h2>
+          <p id="meal-meta" class="meal-meta"></p>
+          <div class="oracle-line"><span aria-hidden="true"></span><p id="oracle-line"></p></div>
+          <p id="meal-reason" class="meal-reason"></p>
+          <div class="result-actions">
+            <button id="confirm-button" class="confirm-button" type="button">就吃这个</button>
+            <button id="retry-button" class="retry-button" type="button">换一卦</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="food-log" aria-labelledby="food-log-title">
+        <div class="food-log-heading">
+          <p class="eyebrow">今日食录</p>
+          <h2 id="food-log-title">留三处，记三餐</h2>
+        </div>
+        <ol class="log-slots">
+          <li data-slot="早餐"><span>早餐</span><strong>尚未落笔</strong></li>
+          <li data-slot="午餐"><span>午餐</span><strong>尚未落笔</strong></li>
+          <li data-slot="晚餐"><span>晚餐</span><strong>尚未落笔</strong></li>
+        </ol>
+      </section>
+
+      <footer class="site-footer">
+        <p>卦象呈现仅供娱乐。营养相关文字仅作日常饮食提示，不构成医疗建议。</p>
+      </footer>
+    </main>
+    <div id="live-region" class="sr-only" aria-live="polite" aria-atomic="true"></div>
     <script type="module" src="./assets/app.js"></script>
   </body>
 </html>
