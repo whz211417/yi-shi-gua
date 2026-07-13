@@ -205,6 +205,7 @@ test('persistence safely falls back for broken JSON, bad schema, bad records, an
   const unavailable = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); } };
   assert.deepEqual(loadStoredState(unavailable), { menu: STARTER_MEALS, recordsByDate: {} });
   assert.equal(saveStoredState(unavailable, { menu: [meal('ok')], recordsByDate: {} }), false);
+  assert.equal(saveStoredState(null, { menu: [meal('ok')], recordsByDate: {} }), false);
 });
 
 function meal(id, overrides = {}) {

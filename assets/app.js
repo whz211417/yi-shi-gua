@@ -65,10 +65,10 @@ export function loadStoredState(storage) {
 /** Persist only validated, serializable local state. Returns false when storage is unavailable. */
 export function saveStoredState(storage, state) {
   try {
-    if (!isRecord(state) || !isValidMenu(state.menu)) return false;
+    if (!storage || typeof storage.setItem !== 'function' || !isRecord(state) || !isValidMenu(state.menu)) return false;
     const records = normaliseRecordsByDate(state.recordsByDate);
     if (!records.valid) return false;
-    storage?.setItem(STORAGE_KEY, JSON.stringify({ version: STORAGE_VERSION, menu: normaliseMenu(state.menu), recordsByDate: records.recordsByDate }));
+    storage.setItem(STORAGE_KEY, JSON.stringify({ version: STORAGE_VERSION, menu: normaliseMenu(state.menu), recordsByDate: records.recordsByDate }));
     return true;
   } catch {
     return false;
@@ -180,14 +180,25 @@ function initialiseCastingInterface() {
   numberInput.addEventListener('change', normaliseNumber); numberInput.addEventListener('blur', normaliseNumber);
   randomButton.addEventListener('click', () => { numberInput.value = String(Math.floor(Math.random() * 64) + 1); numberInput.focus(); });
   castButton.addEventListener('click', () => cast(false)); retryButton.addEventListener('click', () => cast(true)); confirmButton.addEventListener('click', confirmMeal);
-  menuOpenButton.addEventListener('click', () => { menuPanel.hidden = false; menuOpenButton.setAttribute('aria-expanded', 'true'); menuCloseButton.focus(); });
-  menuCloseButton.addEventListener('click', closeMenu); menuPanel.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeMenu(); });
+  let menuInvoker = null;
+  const menuFocusableSelector = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), [href]';
+  menuOpenButton.addEventListener('click', () => { menuInvoker = document.activeElement; menuPanel.hidden = false; menuOpenButton.setAttribute('aria-expanded', 'true'); menuCloseButton.focus(); });
+  menuCloseButton.addEventListener('click', closeMenu);
+  menuPanel.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') { closeMenu(); return; }
+    if (event.key !== 'Tab') return;
+    const focusable = [...menuPanel.querySelectorAll(menuFocusableSelector)].filter((element) => !element.hidden);
+    if (focusable.length === 0) { event.preventDefault(); return; }
+    const first = focusable[0]; const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  });
   addMealButton.addEventListener('click', () => { state.menu.push(newMeal()); persist(); renderMenu(); const first = menuList.querySelector('input'); if (first) first.focus(); });
   resetMenuButton.addEventListener('click', () => { if (window.confirm('确定要恢复起始菜单吗？这会覆盖当前本地菜单。')) { state.menu = normaliseMenu(null); persist(); renderMenu(); announce('菜单已恢复为起始项。'); } });
 
   function safeStorage() { try { return window.localStorage; } catch { return null; } }
   function persist() { if (!saveStoredState(safeStorage(), state)) announce('本地保存不可用，本次修改仍会保留到页面关闭前。'); }
-  function closeMenu() { menuPanel.hidden = true; menuOpenButton.setAttribute('aria-expanded', 'false'); menuOpenButton.focus(); }
+  function closeMenu() { menuPanel.hidden = true; menuOpenButton.setAttribute('aria-expanded', 'false'); (menuInvoker || menuOpenButton).focus(); menuInvoker = null; }
   function selectedValue(groupId, fallback) { return document.querySelector(`#${groupId} input:checked`)?.value || fallback; }
   function cast(isRetry) {
     if (isRetry && state.selected) state.rejectedIds.push(state.selected.id);
