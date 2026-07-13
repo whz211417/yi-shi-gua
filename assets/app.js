@@ -75,6 +75,23 @@ export function saveStoredState(storage, state) {
   }
 }
 
+/** Resolve manual weather or an offline local-season approximation; it never fetches real weather. */
+export function resolveWeather(weather = '不考虑', dateKey = todayKey()) {
+  if (weather !== '自动以本地日期推演') return ['不考虑', '晴热', '下雨', '偏冷'].includes(weather) ? weather : '不考虑';
+  const month = dateParts(dateKey)?.month;
+  if ([6, 7, 8].includes(month)) return '晴热';
+  if ([12, 1, 2].includes(month)) return '偏冷';
+  return '不考虑';
+}
+
+/** Build a deterministic seed from the report number and the current local context. */
+export function contextualSeed(reportNumber, context = {}) {
+  const safeContext = isRecord(context) ? context : {};
+  const dateKey = typeof safeContext.dateKey === 'string' ? safeContext.dateKey : '';
+  const weather = resolveWeather(safeContext.weather, dateKey);
+  return hashString([reportNumber, dateKey, safeContext.mealPeriod || '', weather, safeContext.place || ''].join('|'));
+}
+
 /** Score one meal against a serializable recommendation context. Higher is better. */
 export function scoreMeal(meal, context = {}) {
   if (!isRecord(meal)) return Number.NEGATIVE_INFINITY;
@@ -82,25 +99,29 @@ export function scoreMeal(meal, context = {}) {
   const recent = normaliseRecent(safeContext.recent);
   const recentTwo = recent.slice(0, 2);
   const latestSeveral = recent.slice(0, 5);
+  const calendarRecent = recentWithinCalendarDays(recent, safeContext.dateKey, 3);
+  const weather = resolveWeather(safeContext.weather, safeContext.dateKey);
   let score = 100;
   for (const record of recentTwo) {
     if (sameMeal(record, meal)) score -= 110;
     if (record.staple === meal.staple) score -= 42;
     if (record.protein === meal.protein) score -= 42;
   }
-  for (const record of latestSeveral) {
+  for (const record of calendarRecent) {
     if (record.venue && record.venue === meal.venue) score -= 7;
     if (record.flavor && record.flavor === meal.flavor) score -= 5;
   }
-  const vegetablePoor = recent.some((record) => record.vegetable === '无' || record.vegetable === '少');
+  const vegetablePoor = latestSeveral.some((record) => record.vegetable === '无' || record.vegetable === '少');
   if (vegetablePoor && meal.vegetable === '有') score += 28;
   if (vegetablePoor && meal.vegetable === '无') score -= 12;
   const proteinCounts = countBy(recent.slice(0, 3), 'protein');
   if ((proteinCounts[meal.protein] || 0) >= 2) score -= 22;
   if (Object.keys(proteinCounts).length > 0 && (proteinCounts[meal.protein] || 0) === 0) score += 16;
-  const lastMealWasHeavy = recent.slice(0, 2).some((record) => isHeavy(record.flavor));
+  const lastMealWasHeavy = recentTwo.some((record) => isHeavy(record.flavor));
   if (lastMealWasHeavy && (meal.flavor === '清淡' || meal.flavor === '汤类')) score += 18;
   if (lastMealWasHeavy && isHeavy(meal.flavor)) score -= 16;
+  if (weather === '下雨' || weather === '偏冷') { if (meal.flavor === '汤类') score += 9; }
+  if (weather === '晴热' && (meal.flavor === '清淡' || meal.flavor === '汤类')) score += 8;
   if (safeContext.mealPeriod === '早餐' && meal.protein !== '无明确蛋白') score += 4;
   return score;
 }
@@ -131,6 +152,20 @@ export function oracleFor(seed, dateKey = '', mealPeriod = '') {
   return FOOD_ORACLES[index];
 }
 
+/** Return an entertainment-only oracle using the same contextual seed as the recommendation. */
+export function oracleForContext(reportNumber, context = {}) { return oracleFor(contextualSeed(reportNumber, context)); }
+
+/** Produce a compact non-medical observation from today's confirmed records. */
+export function dailyBalanceTip(records = []) {
+  const confirmed = Array.isArray(records) ? records.filter(isRecord) : [];
+  if (confirmed.length === 0) return '今日均衡提示：尚无已确认餐食，按实际饥饿和时间从一餐开始即可。';
+  if (!confirmed.some((record) => record.vegetable === '有')) return '今日均衡提示：还没记到蔬菜，下餐可考虑加一份日常蔬菜。';
+  const proteins = countBy(confirmed.filter((record) => record.protein && record.protein !== '无明确蛋白'), 'protein');
+  const repeated = Object.entries(proteins).find(([, count]) => count >= 2);
+  if (repeated) return `今日均衡提示：${repeated[0]}已出现两次，下餐可换一种常见蛋白来源，留一点变化。`;
+  return '今日均衡提示：已记餐食有蔬菜和变化，按你的食量继续安排就好。';
+}
+
 function defaultStoredState() { return { menu: cloneMeals(STARTER_MEALS), recordsByDate: {} }; }
 function isValidMenu(menu) { return Array.isArray(menu) && menu.length > 0 && menu.every(isUsableMeal) && hasUniqueIds(menu); }
 function isUsableMeal(meal) {
@@ -139,13 +174,28 @@ function isUsableMeal(meal) {
     && VALID_STAPLES.has(meal.staple) && VALID_PROTEINS.has(meal.protein) && VALID_VEGETABLES.has(meal.vegetable) && VALID_FLAVORS.has(meal.flavor) && typeof meal.enabled === 'boolean';
 }
 function isUsableRecord(record, date) { return isUsableMeal(record) && MEAL_PERIODS.has(record.mealPeriod) && record.date === date && Number.isFinite(record.confirmedAt); }
-function isDateKey(value) { return /^\d{4}-\d{2}-\d{2}$/.test(value); }
+function isDateKey(value) { return Boolean(dateParts(value)); }
+function dateParts(value) {
+  const match = typeof value === 'string' && /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const [, year, month, day] = match.map(Number);
+  if (month < 1 || month > 12 || day < 1 || day > new Date(year, month, 0).getDate()) return null;
+  return { year, month, day };
+}
 function hasUniqueIds(meals) { return new Set(meals.map((meal) => meal.id)).size === meals.length; }
 function cloneMeals(meals) { return meals.map((meal) => ({ ...meal, meals: [...meal.meals] })); }
 function cloneRecord(record) { return { ...record, meals: [...record.meals] }; }
 function isRecord(value) { return value !== null && typeof value === 'object' && !Array.isArray(value); }
 function hasText(value) { return typeof value === 'string' && value.trim().length > 0; }
-function normaliseRecent(recent) { return Array.isArray(recent) ? recent.slice(0, RECENT_HISTORY_WINDOW).filter(isRecord) : []; }
+function normaliseRecent(recent) { return Array.isArray(recent) ? recent.filter(isRecord) : []; }
+function recentWithinCalendarDays(records, dateKey, calendarDays) {
+  const parts = dateParts(dateKey);
+  if (!parts) return [];
+  const start = new Date(parts.year, parts.month - 1, parts.day);
+  start.setDate(start.getDate() - (calendarDays - 1));
+  const firstDay = todayKey(start);
+  return records.filter((record) => isDateKey(record.date) && record.date >= firstDay && record.date <= dateKey);
+}
 function matchesPlace(meal, place) { if (!place || place === '不限') return true; if (place === '在学校' || place === '不想走远') return meal.source === '食堂'; return place !== '校外' || meal.source === '校外'; }
 function repeatsCore(record, meal) { return isRecord(record) && (sameMeal(record, meal) || record.staple === meal.staple || record.protein === meal.protein); }
 function sameMeal(record, meal) { return isRecord(record) && isRecord(meal) && (record.mealId === meal.id || record.id === meal.id || record.name === meal.name); }
@@ -168,10 +218,10 @@ function initialiseCastingInterface() {
   const $ = (selector) => document.querySelector(selector);
   const numberInput = $('#number-input'); const randomButton = $('#random-number-button'); const castButton = $('#cast-button');
   const retryButton = $('#retry-button'); const confirmButton = $('#confirm-button'); const resultCard = $('#result-card');
-  const resultEmpty = $('#result-empty'); const resultContent = $('#result-content'); const liveRegion = $('#live-region'); const dateStamp = $('#today-date');
+  const resultEmpty = $('#result-empty'); const resultContent = $('#result-content'); const liveRegion = $('#live-region'); const dateStamp = $('#today-date'); const balanceTip = $('#daily-balance-tip');
   const menuOpenButton = $('#menu-open-button'); const menuCloseButton = $('#menu-close-button'); const menuPanel = $('#menu-panel'); const menuList = $('#menu-list');
   const addMealButton = $('#add-meal-button'); const resetMenuButton = $('#reset-menu-button');
-  if (![numberInput, randomButton, castButton, retryButton, confirmButton, resultCard, resultEmpty, resultContent, liveRegion, dateStamp, menuOpenButton, menuCloseButton, menuPanel, menuList, addMealButton, resetMenuButton].every(Boolean)) return;
+  if (![numberInput, randomButton, castButton, retryButton, confirmButton, resultCard, resultEmpty, resultContent, liveRegion, dateStamp, balanceTip, menuOpenButton, menuCloseButton, menuPanel, menuList, addMealButton, resetMenuButton].every(Boolean)) return;
   const today = new Date(); const date = todayKey(today); const saved = loadStoredState(safeStorage());
   const state = { menu: saved.menu, recordsByDate: saved.recordsByDate, rejectedIds: [], selected: null };
   dateStamp.textContent = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' }).format(today);
@@ -202,12 +252,22 @@ function initialiseCastingInterface() {
   function selectedValue(groupId, fallback) { return document.querySelector(`#${groupId} input:checked`)?.value || fallback; }
   function cast(isRetry) {
     if (isRetry && state.selected) state.rejectedIds.push(state.selected.id);
-    const seed = normaliseNumber(); const mealPeriod = selectedValue('meal-period', '午餐'); const place = selectedValue('place', '在学校'); const weather = selectedValue('weather', '不考虑');
+    const reportNumber = normaliseNumber(); const mealPeriod = selectedValue('meal-period', '午餐'); const place = selectedValue('place', '在学校'); const weather = selectedValue('weather', '自动以本地日期推演');
+    const context = { dateKey: date, mealPeriod, place, weather };
+    const seed = contextualSeed(reportNumber, context);
     const history = normaliseRecordsByDate(state.recordsByDate).history;
-    const recommendation = chooseMeal({ meals: state.menu, mealPeriod, place, weather, rejectedIds: state.rejectedIds, seed, recent: history });
+    const recommendation = chooseMeal({ meals: state.menu, ...context, rejectedIds: state.rejectedIds, seed, recent: history });
     if (!recommendation.meal) { state.rejectedIds = []; announce(recommendation.reason); return; }
     state.selected = { ...recommendation.meal, meals: [...recommendation.meal.meals], mealPeriod, reason: recommendation.reason };
-    showResult(oracleFor(seed, date, mealPeriod), state.selected, seed);
+    resultCard.classList.add('is-casting');
+    castButton.disabled = true;
+    retryButton.disabled = true;
+    window.setTimeout(() => {
+      showResult(oracleForContext(reportNumber, context), state.selected, reportNumber);
+      resultCard.classList.remove('is-casting');
+      castButton.disabled = false;
+      retryButton.disabled = false;
+    }, 680);
   }
   function showResult(oracle, meal, ordinal) {
     $('#result-ordinal').textContent = `第 ${ordinal} 数`; $('#oracle-title').textContent = oracle.title; $('#result-title').textContent = meal.name;
@@ -234,6 +294,7 @@ function initialiseCastingInterface() {
       if (record) { label.textContent = record.name; slot.classList.add('is-filled'); if (!undo) { undo = document.createElement('button'); undo.type = 'button'; undo.className = 'undo-button'; undo.textContent = '撤销'; undo.addEventListener('click', () => undoMeal(period)); slot.append(undo); } }
       else { label.textContent = '尚未落笔'; slot.classList.remove('is-filled'); undo?.remove(); }
     });
+    balanceTip.textContent = dailyBalanceTip([...records.values()]);
   }
   function renderMenu() {
     menuList.replaceChildren();

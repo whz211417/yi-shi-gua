@@ -59,7 +59,8 @@
           <fieldset id="weather" class="choice-group">
             <legend>天气</legend>
             <div class="segmented-control" role="radiogroup" aria-label="天气">
-              <label><input type="radio" name="weather" value="不考虑" checked /><span>不考虑</span></label>
+              <label><input type="radio" name="weather" value="自动以本地日期推演" checked /><span>自动推演</span></label>
+              <label><input type="radio" name="weather" value="不考虑" /><span>不考虑</span></label>
               <label><input type="radio" name="weather" value="晴热" /><span>晴热</span></label>
               <label><input type="radio" name="weather" value="下雨" /><span>下雨</span></label>
               <label><input type="radio" name="weather" value="偏冷" /><span>偏冷</span></label>
@@ -109,6 +110,7 @@
           <li data-slot="午餐"><span>午餐</span><strong>尚未落笔</strong></li>
           <li data-slot="晚餐"><span>晚餐</span><strong>尚未落笔</strong></li>
         </ol>
+        <p id="daily-balance-tip" class="daily-balance-tip" aria-live="polite"></p>
       </section>
 
       <footer class="site-footer">

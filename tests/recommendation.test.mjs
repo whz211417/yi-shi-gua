@@ -4,10 +4,14 @@ import assert from 'node:assert/strict';
 import { STARTER_MEALS, FOOD_ORACLES } from '../assets/data.js';
 import {
   chooseMeal,
+  contextualSeed,
+  dailyBalanceTip,
   loadStoredState,
   normaliseMenu,
   normaliseRecordsByDate,
   oracleFor,
+  oracleForContext,
+  resolveWeather,
   saveStoredState,
   scoreMeal,
   todayKey,
@@ -122,6 +126,65 @@ test('oracleFor is deterministic and maps report numbers into the 64 records', (
   assert.equal(oracleFor(0).title, FOOD_ORACLES[63].title);
   assert.equal(oracleFor(-1).title, FOOD_ORACLES[62].title);
   assert.deepEqual(oracleFor('not-a-number', '2026-07-13', '晚餐'), oracleFor('not-a-number', '2026-07-13', '晚餐'));
+});
+
+test('automatic weather is an offline local-date season rule while manual choices remain unchanged', () => {
+  assert.equal(resolveWeather('自动以本地日期推演', '2026-07-13'), '晴热');
+  assert.equal(resolveWeather('自动以本地日期推演', '2026-01-13'), '偏冷');
+  assert.equal(resolveWeather('自动以本地日期推演', '2026-04-13'), '不考虑');
+  assert.equal(resolveWeather('下雨', '2026-07-13'), '下雨');
+});
+
+test('contextual seed and both deterministic outcomes include report number, local date, meal period, weather, and place', () => {
+  const context = { dateKey: '2026-07-13', mealPeriod: '午餐', weather: '下雨', place: '在学校' };
+  const same = contextualSeed(32, context);
+  assert.equal(same, contextualSeed(32, context));
+  assert.notEqual(same, contextualSeed(32, { ...context, dateKey: '2026-07-14' }));
+  assert.notEqual(same, contextualSeed(32, { ...context, mealPeriod: '晚餐' }));
+  assert.notEqual(same, contextualSeed(32, { ...context, weather: '晴热' }));
+  assert.notEqual(same, contextualSeed(32, { ...context, place: '校外' }));
+  assert.deepEqual(oracleForContext(32, context), oracleForContext(32, context));
+  assert.notDeepEqual(oracleForContext(32, context), oracleForContext(32, { ...context, weather: '晴热' }));
+
+  const meals = [meal('one'), meal('two')];
+  assert.equal(chooseMeal({ meals, ...context, seed: same }).meal.id, chooseMeal({ meals, ...context, seed: same }).meal.id);
+});
+
+test('weather has a small, explainable preference for soup or light meals', () => {
+  const soup = meal('soup', { flavor: '汤类' });
+  const plain = meal('plain', { flavor: '普通' });
+  const light = meal('light', { flavor: '清淡' });
+  assert.ok(scoreMeal(soup, { weather: '下雨' }) > scoreMeal(plain, { weather: '下雨' }));
+  assert.ok(scoreMeal(soup, { weather: '偏冷' }) > scoreMeal(plain, { weather: '偏冷' }));
+  assert.ok(scoreMeal(light, { weather: '晴热' }) > scoreMeal(plain, { weather: '晴热' }));
+});
+
+test('soft venue and flavor repeat penalties use only the current and prior two calendar days', () => {
+  const target = meal('target', { venue: '同一档口', flavor: '普通' });
+  const base = scoreMeal(target, { dateKey: '2026-07-13' });
+  const outsideWindow = scoreMeal(target, {
+    dateKey: '2026-07-13',
+    recent: [{ date: '2026-07-10', venue: '同一档口', flavor: '普通' }],
+  });
+  const insideWindow = scoreMeal(target, {
+    dateKey: '2026-07-13',
+    recent: [{ date: '2026-07-11', venue: '同一档口', flavor: '普通' }],
+  });
+  assert.equal(outsideWindow, base);
+  assert.equal(insideWindow, base - 12);
+});
+
+test('daily balance tips are compact, non-medical, and based on confirmed records', () => {
+  assert.match(dailyBalanceTip([]), /尚无/);
+  assert.match(dailyBalanceTip([record('no-veg', '午餐', '2026-07-13')]), /蔬菜/);
+  assert.match(dailyBalanceTip([
+    record('chicken-one', '早餐', '2026-07-13', 1),
+    record('chicken-two', '午餐', '2026-07-13', 2),
+  ]), /鸡肉/);
+  assert.match(dailyBalanceTip([
+    record('chicken', '早餐', '2026-07-13', 1),
+    record('fish', '午餐', '2026-07-13', 2),
+  ]), /变化/);
 });
 
 test('normaliseMenu restores clean defaults for malformed persisted menus', () => {
