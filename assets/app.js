@@ -217,7 +217,7 @@ if (typeof document !== 'undefined') initialiseCastingInterface();
 function initialiseCastingInterface() {
   const $ = (selector) => document.querySelector(selector);
   const numberInput = $('#number-input'); const randomButton = $('#random-number-button'); const castButton = $('#cast-button');
-  const retryButton = $('#retry-button'); const confirmButton = $('#confirm-button'); const resultCard = $('#result-card'); const fingerStage = $('.finger-stage');
+  const retryButton = $('#retry-button'); const confirmButton = $('#confirm-button'); const resultCard = $('#result-card');
   const resultEmpty = $('#result-empty'); const resultContent = $('#result-content'); const liveRegion = $('#live-region'); const dateStamp = $('#today-date'); const balanceTip = $('#daily-balance-tip');
   const menuOpenButton = $('#menu-open-button'); const menuCloseButton = $('#menu-close-button'); const menuPanel = $('#menu-panel'); const menuList = $('#menu-list');
   const addMealButton = $('#add-meal-button'); const resetMenuButton = $('#reset-menu-button');
@@ -233,7 +233,7 @@ function initialiseCastingInterface() {
   let menuInvoker = null;
   let casting = false;
   let castTimers = [];
-  const castElements = [resultCard, fingerStage, numberInput, castButton].filter(Boolean);
+  const castElements = [resultCard, numberInput, castButton].filter(Boolean);
   const menuFocusableSelector = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), [href]';
   menuOpenButton.addEventListener('click', () => { menuInvoker = document.activeElement; menuPanel.hidden = false; menuOpenButton.setAttribute('aria-expanded', 'true'); menuCloseButton.focus(); });
   menuCloseButton.addEventListener('click', closeMenu);
@@ -266,14 +266,13 @@ function initialiseCastingInterface() {
     const reveal = () => showResult(oracleForContext(reportNumber, context), state.selected, reportNumber);
     if (prefersReducedMotion()) { reveal(); return; }
     startCasting();
-    scheduleCastPhase('finger', 220);
-    scheduleCastPhase('ink', 620);
+    scheduleCastPhase('ink', 180);
     castTimers.push(window.setTimeout(() => {
       if (!casting) return;
       setCastPhase('seal');
       reveal();
-    }, 960));
-    castTimers.push(window.setTimeout(finishCasting, 1240));
+    }, 760));
+    castTimers.push(window.setTimeout(finishCasting, 1040));
   }
   function prefersReducedMotion() {
     return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
