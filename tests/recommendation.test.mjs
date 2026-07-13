@@ -30,6 +30,7 @@ test('starter menu offers 70+ varied editable choices across key meal situations
   assert.ok(STARTER_MEALS.some((meal) => meal.protein === '鱼虾' && meal.meals.includes('晚餐')), 'missing fish/shrimp dinner');
   assert.ok(STARTER_MEALS.some((meal) => meal.staple === '粥类' && meal.meals.includes('晚餐')), 'missing porridge dinner');
   assert.equal(new Set(STARTER_MEALS.map((meal) => meal.id)).size, STARTER_MEALS.length, 'starter meal ids must be unique');
+  assert.equal(new Set(STARTER_MEALS.map((meal) => meal.name)).size, STARTER_MEALS.length, 'starter meal names must be unique');
   const validSources = new Set(['食堂', '校外']);
   const validPeriods = new Set(['早餐', '午餐', '晚餐']);
   const validStaples = new Set(['米饭', '粉类', '面食', '粥类']);

@@ -78,7 +78,7 @@ export const STARTER_MEALS = [
   { id: 'off-pork-noodle', name: '榨菜肉丝汤面', source: '校外', venue: '附近面馆', meals: ['午餐', '晚餐'], staple: '面食', protein: '猪肉', vegetable: '少', flavor: '汤类', enabled: true },
   { id: 'off-mixed-vegetable-rice', name: '时蔬豆腐饭', source: '校外', venue: '附近素食店', meals: ['午餐', '晚餐'], staple: '米饭', protein: '豆制品', vegetable: '有', flavor: '清淡', enabled: true },
   { id: 'off-chicken-curry-rice', name: '咖喱鸡肉饭配时蔬', source: '校外', venue: '附近简餐店', meals: ['午餐', '晚餐'], staple: '米饭', protein: '鸡肉', vegetable: '有', flavor: '普通', enabled: true },
-  { id: 'off-fish-rice-ball', name: '三文鱼饭团配沙拉', source: '校外', venue: '附近轻食店', meals: ['午餐'], staple: '米饭', protein: '鱼虾', vegetable: '有', flavor: '清淡', enabled: true },
+  { id: 'off-fish-rice-ball', name: '三文鱼饭团配海带沙拉', source: '校外', venue: '附近轻食店', meals: ['午餐'], staple: '米饭', protein: '鱼虾', vegetable: '有', flavor: '清淡', enabled: true },
   { id: 'off-beef-casserole', name: '土豆牛肉煲配米饭', source: '校外', venue: '附近家常菜馆', meals: ['午餐', '晚餐'], staple: '米饭', protein: '牛肉', vegetable: '有', flavor: '普通', enabled: true },
 ];
 
