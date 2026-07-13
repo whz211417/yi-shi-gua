@@ -4,15 +4,15 @@
 
 ## 打开方式
 
-最简单：直接双击 `index.html`，用现代浏览器打开即可。
+> **不要直接双击 `index.html`。** 页面使用 ES Modules；在 Windows 的 `file://` 直接打开模式下，Chrome 会出于安全限制拦截模块脚本，导致按钮看起来存在但不会响应。
 
-如果你想通过本地地址预览，在项目根目录运行：
+请在项目根目录启动一个本地静态服务器：
 
 ```bash
-python -m http.server 4173
+python -m http.server 4173 --bind 127.0.0.1
 ```
 
-然后打开 `http://localhost:4173`。
+然后用 Chrome 打开 `http://127.0.0.1:4173`。
 
 ## 使用方法
 

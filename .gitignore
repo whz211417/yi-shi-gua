@@ -1,0 +1,5 @@
+# Local visual-inspection captures; they are not product source files.
+artifacts/
+
+# Local browser/editor state
+.DS_Store
