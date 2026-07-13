@@ -17,13 +17,33 @@ import {
   todayKey,
 } from '../assets/app.js';
 
-test('starter menu covers all periods, venue types, and editable fields', () => {
-  assert.ok(STARTER_MEALS.length >= 24 && STARTER_MEALS.length <= 36);
+test('starter menu offers 70+ varied editable choices across key meal situations', () => {
+  assert.ok(STARTER_MEALS.length >= 70, 'starter menu should contain at least 70 choices');
   for (const period of ['早餐', '午餐', '晚餐']) {
     assert.ok(STARTER_MEALS.some((meal) => meal.meals.includes(period)), `missing ${period}`);
   }
   for (const source of ['食堂', '校外']) {
     assert.ok(STARTER_MEALS.some((meal) => meal.source === source), `missing ${source}`);
+  }
+  assert.ok(STARTER_MEALS.some((meal) => meal.source === '校外' && meal.meals.includes('早餐')), 'missing off-campus breakfast');
+  assert.ok(STARTER_MEALS.some((meal) => meal.protein === '鱼虾' && meal.meals.includes('午餐')), 'missing fish/shrimp lunch');
+  assert.ok(STARTER_MEALS.some((meal) => meal.protein === '鱼虾' && meal.meals.includes('晚餐')), 'missing fish/shrimp dinner');
+  assert.ok(STARTER_MEALS.some((meal) => meal.staple === '粥类' && meal.meals.includes('晚餐')), 'missing porridge dinner');
+  assert.equal(new Set(STARTER_MEALS.map((meal) => meal.id)).size, STARTER_MEALS.length, 'starter meal ids must be unique');
+  const validSources = new Set(['食堂', '校外']);
+  const validPeriods = new Set(['早餐', '午餐', '晚餐']);
+  const validStaples = new Set(['米饭', '粉类', '面食', '粥类']);
+  const validProteins = new Set(['鸡肉', '牛肉', '猪肉', '鱼虾', '蛋类', '豆制品', '无明确蛋白']);
+  const validVegetables = new Set(['有', '少', '无']);
+  const validFlavors = new Set(['清淡', '普通', '汤类', '重口', '油炸']);
+  for (const meal of STARTER_MEALS) {
+    assert.ok(validSources.has(meal.source), `${meal.name} has invalid source`);
+    assert.ok(Array.isArray(meal.meals) && meal.meals.length > 0 && meal.meals.every((period) => validPeriods.has(period)), `${meal.name} has invalid periods`);
+    assert.ok(validStaples.has(meal.staple), `${meal.name} has invalid staple`);
+    assert.ok(validProteins.has(meal.protein), `${meal.name} has invalid protein`);
+    assert.ok(validVegetables.has(meal.vegetable), `${meal.name} has invalid vegetable value`);
+    assert.ok(validFlavors.has(meal.flavor), `${meal.name} has invalid flavor`);
+    assert.equal(typeof meal.enabled, 'boolean', `${meal.name} has invalid enabled value`);
   }
   for (const meal of STARTER_MEALS) {
     for (const key of ['id', 'name', 'source', 'venue', 'meals', 'staple', 'protein', 'vegetable', 'flavor', 'enabled']) {
