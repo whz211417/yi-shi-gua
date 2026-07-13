@@ -494,7 +494,7 @@ h1 span { display: block; white-space: nowrap; }
     var(--ink-raised);
   box-shadow: 0 24px 80px rgb(0 0 0 / .5);
 }
-.menu-panel-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+.menu-panel-header { position: sticky; z-index: 2; top: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 14px 0 20px; border-bottom: 1px solid var(--line); background: var(--ink-raised); }
 .menu-panel-header h2 { margin: 0; font-family: "Songti SC", "STSong", serif; font-size: 30px; font-weight: 500; }
 .menu-count, .menu-panel-note { color: var(--paper-muted); font-size: 13px; line-height: 1.7; }
 .menu-count { margin: 8px 0 0; }
@@ -557,7 +557,7 @@ h1 span { display: block; white-space: nowrap; }
 @media (max-width: 699px) {
   .date-stamp { display: none; }
   .hero { padding-top: 42px; }
-  h1 { font-size: clamp(42px, 15vw, 62px); line-height: .98; }
+  h1 { font-size: clamp(42px, 13vw, 62px); line-height: .98; }
   .oracle-aside { min-height: 86px; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; padding: 13px 12px; }
   .hexagram-seal { width: min(32vw, 102px); grid-template-columns: repeat(6, 1fr); gap: 4px; }
   .hexagram-seal span { height: 22px; background: linear-gradient(180deg, transparent 0 45%, currentColor 45% 55%, transparent 55%); }

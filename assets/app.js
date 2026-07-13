@@ -268,8 +268,12 @@ function initialiseCastingInterface() {
     startCasting();
     scheduleCastPhase('finger', 220);
     scheduleCastPhase('ink', 620);
-    scheduleCastPhase('seal', 960);
-    castTimers.push(window.setTimeout(() => { reveal(); finishCasting(); }, 1240));
+    castTimers.push(window.setTimeout(() => {
+      if (!casting) return;
+      setCastPhase('seal');
+      reveal();
+    }, 960));
+    castTimers.push(window.setTimeout(finishCasting, 1240));
   }
   function prefersReducedMotion() {
     return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
