@@ -2,7 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { STARTER_MEALS, FOOD_ORACLES } from '../assets/data.js';
-import { chooseMeal, normaliseMenu, oracleFor, scoreMeal, todayKey } from '../assets/app.js';
+import {
+  chooseMeal,
+  loadStoredState,
+  normaliseMenu,
+  normaliseRecordsByDate,
+  oracleFor,
+  saveStoredState,
+  scoreMeal,
+  todayKey,
+} from '../assets/app.js';
 
 test('starter menu covers all periods, venue types, and editable fields', () => {
   assert.ok(STARTER_MEALS.length >= 24 && STARTER_MEALS.length <= 36);
@@ -171,6 +180,33 @@ test('todayKey formats a local date as an ISO-like day key', () => {
   assert.equal(todayKey(new Date(2026, 6, 13)), '2026-07-13');
 });
 
+test('persistence restores a valid editable menu and newest-first confirmed records', () => {
+  const storage = memoryStorage();
+  const state = {
+    menu: [meal('custom', { name: '自定义轻食' })],
+    recordsByDate: {
+      '2026-07-12': [record('earlier', '早餐', '2026-07-12', 100)],
+      '2026-07-13': [record('latest', '午餐', '2026-07-13', 200)],
+    },
+  };
+  assert.equal(saveStoredState(storage, state), true);
+  assert.deepEqual(loadStoredState(storage), state);
+  assert.deepEqual(normaliseRecordsByDate(state.recordsByDate).history.map((item) => item.id), ['latest', 'earlier']);
+});
+
+test('persistence safely falls back for broken JSON, bad schema, bad records, and unavailable storage', () => {
+  const storage = memoryStorage();
+  storage.setItem('yi-shi-gua:v1', '{broken');
+  assert.deepEqual(loadStoredState(storage), { menu: STARTER_MEALS, recordsByDate: {} });
+
+  storage.setItem('yi-shi-gua:v1', JSON.stringify({ version: 1, menu: [meal('ok')], recordsByDate: { nope: [record('bad', '宵夜', 'nope')] } }));
+  assert.deepEqual(loadStoredState(storage), { menu: STARTER_MEALS, recordsByDate: {} });
+
+  const unavailable = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); } };
+  assert.deepEqual(loadStoredState(unavailable), { menu: STARTER_MEALS, recordsByDate: {} });
+  assert.equal(saveStoredState(unavailable, { menu: [meal('ok')], recordsByDate: {} }), false);
+});
+
 function meal(id, overrides = {}) {
   return {
     id,
@@ -184,5 +220,17 @@ function meal(id, overrides = {}) {
     flavor: '普通',
     enabled: true,
     ...overrides,
+  };
+}
+
+function record(id, mealPeriod, date, confirmedAt = 0) {
+  return { ...meal(id), mealPeriod, date, confirmedAt };
+}
+
+function memoryStorage() {
+  const values = new Map();
+  return {
+    getItem(key) { return values.has(key) ? values.get(key) : null; },
+    setItem(key, value) { values.set(key, value); },
   };
 }

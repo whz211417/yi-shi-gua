@@ -14,7 +14,10 @@
           <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
           <span>易食卦</span>
         </a>
-        <p id="today-date" class="date-stamp" aria-label="今日日期"></p>
+        <div class="header-actions">
+          <p id="today-date" class="date-stamp" aria-label="今日日期"></p>
+          <button id="menu-open-button" class="menu-open-button" type="button" aria-expanded="false" aria-controls="menu-panel">管理菜单</button>
+        </div>
       </header>
 
       <section class="hero" aria-labelledby="page-title">
@@ -112,6 +115,24 @@
         <p>卦象呈现仅供娱乐。营养相关文字仅作日常饮食提示，不构成医疗建议。</p>
       </footer>
     </main>
+    <aside id="menu-panel" class="menu-panel" aria-labelledby="menu-panel-title" hidden>
+      <div class="menu-panel-inner" role="dialog" aria-modal="true" aria-labelledby="menu-panel-title">
+        <header class="menu-panel-header">
+          <div>
+            <p class="eyebrow">本地菜单库</p>
+            <h2 id="menu-panel-title">管理你的餐品</h2>
+            <p id="menu-count" class="menu-count"></p>
+          </div>
+          <button id="menu-close-button" class="menu-close-button" type="button" aria-label="关闭菜单管理">关闭</button>
+        </header>
+        <p class="menu-panel-note">所有内容仅保存在这台设备的浏览器中。标签使用固定选项，保证推荐规则可持续生效。</p>
+        <div id="menu-list" class="menu-list" aria-live="polite"></div>
+        <div class="menu-panel-actions">
+          <button id="add-meal-button" class="confirm-button" type="button">新增餐品</button>
+          <button id="reset-menu-button" class="retry-button" type="button">恢复起始菜单</button>
+        </div>
+      </div>
+    </aside>
     <div id="live-region" class="sr-only" aria-live="polite" aria-atomic="true"></div>
     <script type="module" src="./assets/app.js"></script>
   </body>
