@@ -565,7 +565,7 @@ h1 span { display: block; white-space: nowrap; }
   .oracle-order { writing-mode: horizontal-tb; font-size: 12px; letter-spacing: .1em; }
   .cloud-mark { width: 100px; height: 65px; }
   .ritual-sheet { margin-top: 22px; }
-  .finger-stage { display: flex; min-height: 18px; justify-content: flex-start; }
+  .finger-stage { display: grid; min-height: 18px; justify-content: flex-start; }
   .menu-panel { padding: 10px; }
   .menu-panel-inner { padding: 18px; }
 }
