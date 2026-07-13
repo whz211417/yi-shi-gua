@@ -300,7 +300,7 @@ function initialiseCastingInterface() {
     confirmButton.disabled = !state.selected;
     castElements.forEach((element) => { element.classList.remove('is-casting'); delete element.dataset.castPhase; });
   }
-  window.addEventListener('pagehide', finishCasting);
+  window.addEventListener('pagehide', () => { if (casting) state.selected = null; finishCasting(); });
   function showResult(oracle, meal, ordinal) {
     $('#result-ordinal').textContent = `第 ${ordinal} 数`; $('#oracle-title').textContent = oracle.title; $('#result-title').textContent = meal.name;
     $('#meal-meta').textContent = `${meal.source} / ${meal.venue}`; $('#oracle-line').textContent = oracle.line; $('#meal-reason').textContent = meal.reason;
