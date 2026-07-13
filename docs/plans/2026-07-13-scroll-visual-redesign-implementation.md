@@ -181,6 +181,55 @@ git add assets/app.js assets/style.css
 git commit -m "feat: add finger-counting casting ritual"
 ```
 
+### Task 5: 扩充起始菜单并凸显本地食单入口
+
+**Objective:** 将默认餐品从 30 项扩充到约 70–90 项，并明确保留可自行增删改的本地食单抽屉。
+
+**Files:**
+- Modify: `assets/data.js:2-33`
+- Modify: `tests/recommendation.test.mjs`
+- Verify: `index.html` 中 `#menu-open-button` 和 `#menu-panel` 仍存在
+
+**Step 1: 写失败的数据覆盖测试**
+
+在 `tests/recommendation.test.mjs` 新增断言：
+
+```js
+assert.ok(STARTER_MEALS.length >= 70);
+assert.ok(STARTER_MEALS.some((meal) => meal.meals.includes('早餐') && meal.source === '校外'));
+assert.ok(STARTER_MEALS.some((meal) => meal.meals.includes('午餐') && meal.protein === '鱼虾'));
+assert.ok(STARTER_MEALS.some((meal) => meal.meals.includes('晚餐') && meal.staple === '粥类'));
+```
+
+运行 `npm test`，预期数量断言先失败。
+
+**Step 2: 扩充 `STARTER_MEALS`**
+
+添加约 40–60 项常见餐品：早餐覆盖包点、汤粉、粥、面、三明治/饭团；午晚餐覆盖盖饭、炒菜配饭、汤面、拌面、饺子、砂锅、轻食、日常家常菜。每项必须拥有合法 `id/name/source/venue/meals/staple/protein/vegetable/flavor/enabled` 标签，且 id 唯一。
+
+不得声称为暨南大学或某个真实档口的实时供应；档口使用泛化名称或用户可编辑的默认名。
+
+**Step 3: 验证既有本地自定义能力**
+
+以 Chrome 打开页面：
+
+```bash
+agent-browser --session yi-shi-gua click '#menu-open-button'
+agent-browser --session yi-shi-gua is visible '#menu-panel'
+agent-browser --session yi-shi-gua click '#add-meal-button'
+agent-browser --session yi-shi-gua get count '.menu-row'
+```
+
+预期：菜单抽屉可见，新增后行数增加；编辑、删除、启用/停用和恢复按钮仍保留。
+
+**Step 4: 运行测试并提交**
+
+```bash
+npm test
+git add assets/data.js tests/recommendation.test.mjs
+git commit -m "feat: expand editable starter menu"
+```
+
 ### Task 4: 真机尺度浏览器验收与手机使用说明
 
 **Objective:** 用已安装的 Chrome 完成视觉/交互验收，并将手机访问步骤补进 README。
