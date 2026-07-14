@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { STARTER_MEALS, FOOD_ORACLES } from '../assets/data.js';
+import { HEXAGRAMS, TRIGRAMS } from '../assets/hexagrams.js';
 import {
   chooseMeal,
   contextualSeed,
@@ -16,6 +17,70 @@ import {
   scoreMeal,
   todayKey,
 } from '../assets/app.js';
+
+const CANONICAL_TRIGRAM_LINES = {
+  '乾': [1, 1, 1],
+  '兑': [1, 1, 0],
+  '离': [1, 0, 1],
+  '震': [1, 0, 0],
+  '巽': [0, 1, 1],
+  '坎': [0, 1, 0],
+  '艮': [0, 0, 1],
+  '坤': [0, 0, 0],
+};
+
+test('trigram export preserves the eight strict remainder rows and order', () => {
+  assert.deepEqual(TRIGRAMS, [
+    { remainder: 1, name: '乾', symbol: '☰', element: '金', lines: [1, 1, 1] },
+    { remainder: 2, name: '兑', symbol: '☱', element: '金', lines: [0, 1, 1] },
+    { remainder: 3, name: '离', symbol: '☲', element: '火', lines: [1, 0, 1] },
+    { remainder: 4, name: '震', symbol: '☳', element: '木', lines: [1, 0, 0] },
+    { remainder: 5, name: '巽', symbol: '☴', element: '木', lines: [0, 1, 1] },
+    { remainder: 6, name: '坎', symbol: '☵', element: '水', lines: [0, 1, 0] },
+    { remainder: 7, name: '艮', symbol: '☶', element: '土', lines: [0, 0, 1] },
+    { remainder: 8, name: '坤', symbol: '☷', element: '土', lines: [0, 0, 0] },
+  ]);
+});
+
+test('canonical hexagram source has 64 ordered, uniquely encoded King Wen rows', () => {
+  assert.equal(HEXAGRAMS.length, 64);
+  assert.deepEqual(HEXAGRAMS.map(({ number }) => number), Array.from({ length: 64 }, (_, index) => index + 1));
+  assert.equal(new Set(HEXAGRAMS.map(({ name }) => name)).size, 64, 'hexagram names must be unique');
+  assert.equal(new Set(HEXAGRAMS.map(({ lines }) => lines.join(''))).size, 64, 'six-line encodings must be unique');
+});
+
+test('each hexagram vector is lower-first and matches its named canonical trigrams', () => {
+  for (const hexagram of HEXAGRAMS) {
+    assert.equal(hexagram.lines.length, 6, `${hexagram.name} must have six lines`);
+    assert.deepEqual(
+      hexagram.lines,
+      [...CANONICAL_TRIGRAM_LINES[hexagram.lower], ...CANONICAL_TRIGRAM_LINES[hexagram.upper]],
+      `${hexagram.name} line vector must be lower trigram then upper trigram`,
+    );
+  }
+});
+
+test('each hexagram carries distinct, nonempty entertainment readings', () => {
+  const images = HEXAGRAMS.map(({ reading }) => reading.image);
+  const foodCues = HEXAGRAMS.map(({ reading }) => reading.foodCue);
+  assert.ok(images.every((value) => typeof value === 'string' && value.trim().length > 0));
+  assert.ok(foodCues.every((value) => typeof value === 'string' && value.trim().length > 0));
+  assert.equal(new Set(images).size, 64, 'reading images must be distinct');
+  assert.equal(new Set(foodCues).size, 64, 'food cues must be distinct');
+});
+
+test('canonical named examples retain their King Wen identity', () => {
+  const namesByNumber = new Map(HEXAGRAMS.map(({ number, name }) => [number, name]));
+  assert.equal(namesByNumber.get(1), '乾为天');
+  assert.equal(namesByNumber.get(2), '坤为地');
+  assert.equal(namesByNumber.get(3), '水雷屯');
+  assert.equal(namesByNumber.get(15), '地山谦');
+  assert.equal(namesByNumber.get(29), '坎为水');
+  assert.equal(namesByNumber.get(30), '离为火');
+  assert.equal(namesByNumber.get(40), '雷水解');
+  assert.equal(namesByNumber.get(63), '水火既济');
+  assert.equal(namesByNumber.get(64), '火水未济');
+});
 
 test('starter menu offers 70+ varied editable choices across key meal situations', () => {
   assert.ok(STARTER_MEALS.length >= 70, 'starter menu should contain at least 70 choices');
