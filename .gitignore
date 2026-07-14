@@ -1,5 +1,8 @@
 # Local visual-inspection captures; they are not product source files.
 artifacts/
 
+# Local design-workshop state
+.superpowers/
+
 # Local browser/editor state
 .DS_Store
