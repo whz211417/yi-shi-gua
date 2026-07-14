@@ -399,8 +399,9 @@ h1 span { display: block; white-space: nowrap; }
 }
 .result-rule { flex: 1; height: 1px; background: linear-gradient(90deg, var(--bronze), transparent); }
 .result-empty { position: relative; z-index: 1; display: grid; min-height: 238px; place-content: center; color: var(--paper-muted); text-align: center; }
+.result-empty[hidden] { display: none; }
 .empty-lines { display: grid; width: 48px; gap: 5px; margin: 0 auto 17px; color: var(--paper); }
-.empty-lines i { height: 2px; opacity: .48; }
+
 .empty-lines i:nth-child(2) { background: linear-gradient(90deg, currentColor 0 40%, transparent 40% 60%, currentColor 60%); }
 .result-empty p { margin: 0; font-size: 14px; }
 .result-content { position: relative; z-index: 1; padding: 31px 2px 0; }
@@ -727,6 +728,19 @@ h1 span { display: block; white-space: nowrap; }
   transform: translateY(-50%);
 }
 .yao-stack-small i.is-moving::after { left: calc(100% + 6px); width: 3px; height: 3px; }
+.result-card.is-casting[data-cast-phase="ink"] .primary-hexagram .hexagram-lines i {
+  opacity: 0;
+  animation: yao-write .24s cubic-bezier(.16, 1, .3, 1) both;
+}
+.result-card.is-casting[data-cast-phase="ink"] .primary-hexagram .hexagram-lines i:nth-child(2) { animation-delay: .06s; }
+.result-card.is-casting[data-cast-phase="ink"] .primary-hexagram .hexagram-lines i:nth-child(3) { animation-delay: .12s; }
+.result-card.is-casting[data-cast-phase="ink"] .primary-hexagram .hexagram-lines i:nth-child(4) { animation-delay: .18s; }
+.result-card.is-casting[data-cast-phase="ink"] .primary-hexagram .hexagram-lines i:nth-child(5) { animation-delay: .24s; }
+.result-card.is-casting[data-cast-phase="ink"] .primary-hexagram .hexagram-lines i:nth-child(6) { animation-delay: .30s; }
+@keyframes yao-write {
+  from { opacity: 0; transform: translateX(-8px); filter: blur(2px); }
+  to { opacity: 1; transform: translateX(0); filter: blur(0); }
+}
 
 .changed-hexagram {
   display: grid;
@@ -738,6 +752,7 @@ h1 span { display: block; white-space: nowrap; }
   color: var(--paper-muted);
   background: rgb(255 255 255 / .02);
 }
+
 .changed-hexagram .hexagram-lines,
 .changed-hexagram .yao-stack { opacity: .72; }
 

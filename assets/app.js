@@ -293,7 +293,7 @@ function initialiseCastingInterface() {
     const reveal = () => showResult(divination, state.selected, reportNumber);
     if (prefersReducedMotion()) { reveal(); return; }
     startCasting();
-    scheduleCastPhase('ink', 180);
+    scheduleCastPhase('ink', 180, () => showCastingHexagram(divination));
     castTimers.push(window.setTimeout(() => {
       if (!casting) return;
       setCastPhase('seal');
@@ -312,8 +312,12 @@ function initialiseCastingInterface() {
     castElements.forEach((element) => element.classList.add('is-casting'));
     setCastPhase('count');
   }
-  function scheduleCastPhase(phase, delay) {
-    castTimers.push(window.setTimeout(() => { if (casting) setCastPhase(phase); }, delay));
+  function scheduleCastPhase(phase, delay, callback) {
+    castTimers.push(window.setTimeout(() => {
+      if (!casting) return;
+      setCastPhase(phase);
+      callback?.();
+    }, delay));
   }
   function setCastPhase(phase) {
     castElements.forEach((element) => { element.dataset.castPhase = phase; });
@@ -328,6 +332,23 @@ function initialiseCastingInterface() {
     castElements.forEach((element) => { element.classList.remove('is-casting'); delete element.dataset.castPhase; });
   }
   window.addEventListener('pagehide', () => { if (casting) state.selected = null; finishCasting(); });
+  function showCastingHexagram(divination) {
+    const { calendar, upper, lower, primary } = divination;
+    const setText = (id, value) => { const element = $(`#${id}`); if (element) element.textContent = value; };
+    ['mutual-meta', 'moving-line-meta', 'changed-meta', 'image-reading', 'food-cue', 'transition-cue', 'formula-reading', 'oracle-title', 'result-title', 'meal-meta', 'oracle-line', 'meal-reason'].forEach((id) => setText(id, ''));
+    const changedLines = $('#changed-lines');
+    if (changedLines) changedLines.replaceChildren();
+    setText('result-ordinal', '卦象书成');
+    setText('calendar-context', `${calendar.timeLabel} · 农历${calendar.lunarLabel}`);
+    setText('primary-upper', `${upper.symbol} ${upper.name} · ${upper.element}`);
+    setText('primary-lower', `${lower.symbol} ${lower.name} · ${lower.element}`);
+    setText('primary-name', primary.name);
+    setText('primary-meta', `本卦 · 第 ${primary.number} 卦`);
+    renderYaoStack('primary-lines', primary.lines);
+    resultCard.classList.remove('is-empty', 'is-revealing');
+    resultEmpty.hidden = true;
+    resultContent.hidden = false;
+  }
   function showResult(divination, meal, ordinal) {
     const { calendar, upper, lower, primary, mutual, movingLine, movingLineLabel, changed, transitionCue, formula } = divination;
     const setText = (id, value) => { const element = $(`#${id}`); if (element) element.textContent = value; };
