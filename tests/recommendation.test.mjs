@@ -18,21 +18,10 @@ import {
   todayKey,
 } from '../assets/app.js';
 
-const CANONICAL_TRIGRAM_LINES = {
-  '乾': [1, 1, 1],
-  '兑': [1, 1, 0],
-  '离': [1, 0, 1],
-  '震': [1, 0, 0],
-  '巽': [0, 1, 1],
-  '坎': [0, 1, 0],
-  '艮': [0, 0, 1],
-  '坤': [0, 0, 0],
-};
-
 test('trigram export preserves the eight strict remainder rows and order', () => {
   assert.deepEqual(TRIGRAMS, [
     { remainder: 1, name: '乾', symbol: '☰', element: '金', lines: [1, 1, 1] },
-    { remainder: 2, name: '兑', symbol: '☱', element: '金', lines: [0, 1, 1] },
+    { remainder: 2, name: '兑', symbol: '☱', element: '金', lines: [1, 1, 0] },
     { remainder: 3, name: '离', symbol: '☲', element: '火', lines: [1, 0, 1] },
     { remainder: 4, name: '震', symbol: '☳', element: '木', lines: [1, 0, 0] },
     { remainder: 5, name: '巽', symbol: '☴', element: '木', lines: [0, 1, 1] },
@@ -50,11 +39,12 @@ test('canonical hexagram source has 64 ordered, uniquely encoded King Wen rows',
 });
 
 test('each hexagram vector is lower-first and matches its named canonical trigrams', () => {
+  const trigramLines = new Map(TRIGRAMS.map(({ name, lines }) => [name, lines]));
   for (const hexagram of HEXAGRAMS) {
     assert.equal(hexagram.lines.length, 6, `${hexagram.name} must have six lines`);
     assert.deepEqual(
       hexagram.lines,
-      [...CANONICAL_TRIGRAM_LINES[hexagram.lower], ...CANONICAL_TRIGRAM_LINES[hexagram.upper]],
+      [...trigramLines.get(hexagram.lower), ...trigramLines.get(hexagram.upper)],
       `${hexagram.name} line vector must be lower trigram then upper trigram`,
     );
   }
@@ -67,6 +57,7 @@ test('each hexagram carries distinct, nonempty entertainment readings', () => {
   assert.ok(foodCues.every((value) => typeof value === 'string' && value.trim().length > 0));
   assert.equal(new Set(images).size, 64, 'reading images must be distinct');
   assert.equal(new Set(foodCues).size, 64, 'food cues must be distinct');
+  assert.ok(foodCues.every((value) => !/游戏|挑战|任务|投票|猜猜|数一数|朗读|同伴/.test(value)), 'food cues must be food interpretations, not activities');
 });
 
 test('canonical named examples retain their King Wen identity', () => {
