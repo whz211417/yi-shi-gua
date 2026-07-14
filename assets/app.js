@@ -1,4 +1,6 @@
-import { FOOD_ORACLES, STARTER_MEALS } from './data.js';
+import { STARTER_MEALS } from './data.js';
+import { FOOD_ORACLES } from './data.js';
+import { beijingCalendarParts, deriveDivination } from './divination.js';
 
 export const STORAGE_KEY = 'yi-shi-gua:v1';
 const STORAGE_VERSION = 1;
@@ -90,6 +92,15 @@ export function contextualSeed(reportNumber, context = {}) {
   const dateKey = typeof safeContext.dateKey === 'string' ? safeContext.dateKey : '';
   const weather = resolveWeather(safeContext.weather, dateKey);
   return hashString([reportNumber, dateKey, safeContext.mealPeriod || '', weather, safeContext.place || ''].join('|'));
+}
+
+/** Combine the computed plum-blossom result with the normalised meal context. */
+export function divinationSeed(divination, context = {}) {
+  const safeDivination = isRecord(divination) ? divination : {};
+  const primaryNumber = Number(safeDivination.primary?.number);
+  const changedNumber = Number(safeDivination.changed?.number);
+  const movingLine = Number(safeDivination.movingLine);
+  return hashString([primaryNumber, changedNumber, movingLine, contextualSeed(primaryNumber, context)].join('|'));
 }
 
 /** Score one meal against a serializable recommendation context. Higher is better. */
@@ -218,13 +229,19 @@ function initialiseCastingInterface() {
   const $ = (selector) => document.querySelector(selector);
   const numberInput = $('#number-input'); const randomButton = $('#random-number-button'); const castButton = $('#cast-button');
   const retryButton = $('#retry-button'); const confirmButton = $('#confirm-button'); const resultCard = $('#result-card');
-  const resultEmpty = $('#result-empty'); const resultContent = $('#result-content'); const liveRegion = $('#live-region'); const dateStamp = $('#today-date'); const balanceTip = $('#daily-balance-tip');
+  const resultEmpty = $('#result-empty'); const resultContent = $('#result-content'); const liveRegion = $('#live-region'); const dateStamp = $('#today-date'); const calendarStatus = $('#calendar-status'); const balanceTip = $('#daily-balance-tip');
   const menuOpenButton = $('#menu-open-button'); const menuCloseButton = $('#menu-close-button'); const menuPanel = $('#menu-panel'); const menuList = $('#menu-list');
   const addMealButton = $('#add-meal-button'); const resetMenuButton = $('#reset-menu-button');
-  if (![numberInput, randomButton, castButton, retryButton, confirmButton, resultCard, resultEmpty, resultContent, liveRegion, dateStamp, balanceTip, menuOpenButton, menuCloseButton, menuPanel, menuList, addMealButton, resetMenuButton].every(Boolean)) return;
+  if (![numberInput, randomButton, castButton, retryButton, confirmButton, resultCard, resultEmpty, resultContent, liveRegion, dateStamp, calendarStatus, balanceTip, menuOpenButton, menuCloseButton, menuPanel, menuList, addMealButton, resetMenuButton].every(Boolean)) return;
   const today = new Date(); const date = todayKey(today); const saved = loadStoredState(safeStorage());
   const state = { menu: saved.menu, recordsByDate: saved.recordsByDate, rejectedIds: [], selected: null };
   dateStamp.textContent = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' }).format(today);
+  try {
+    const calendar = beijingCalendarParts(today);
+    calendarStatus.textContent = `按北京时间 · 农历${calendar.lunarLabel} · ${calendar.hourName}时`;
+  } catch {
+    calendarStatus.textContent = '当前浏览器不支持农历起卦，请使用新版 Chrome、Edge 或 Safari';
+  }
   renderFoodLog(); renderMenu();
   const normaliseNumber = () => { const parsed = Number.parseInt(numberInput.value, 10); const value = Number.isFinite(parsed) ? Math.min(64, Math.max(1, parsed)) : 1; numberInput.value = String(value); return value; };
   numberInput.addEventListener('change', normaliseNumber); numberInput.addEventListener('blur', normaliseNumber);
@@ -255,15 +272,25 @@ function initialiseCastingInterface() {
   function selectedValue(groupId, fallback) { return document.querySelector(`#${groupId} input:checked`)?.value || fallback; }
   function cast(isRetry) {
     if (casting) return;
-    if (isRetry && state.selected) state.rejectedIds.push(state.selected.id);
+    const now = new Date();
     const reportNumber = normaliseNumber(); const mealPeriod = selectedValue('meal-period', '午餐'); const place = selectedValue('place', '在学校'); const weather = selectedValue('weather', '自动以本地日期推演');
+    let divination;
+    try {
+      divination = deriveDivination(reportNumber, beijingCalendarParts(now));
+    } catch {
+      const message = '当前浏览器不支持农历起卦，请使用新版 Chrome、Edge 或 Safari';
+      calendarStatus.textContent = message;
+      announce(message);
+      return;
+    }
+    if (isRetry && state.selected) state.rejectedIds.push(state.selected.id);
     const context = { dateKey: date, mealPeriod, place, weather };
-    const seed = contextualSeed(reportNumber, context);
+    const seed = divinationSeed(divination, context);
     const history = normaliseRecordsByDate(state.recordsByDate).history;
     const recommendation = chooseMeal({ meals: state.menu, ...context, rejectedIds: state.rejectedIds, seed, recent: history });
     if (!recommendation.meal) { state.rejectedIds = []; announce(recommendation.reason); return; }
     state.selected = { ...recommendation.meal, meals: [...recommendation.meal.meals], mealPeriod, reason: recommendation.reason };
-    const reveal = () => showResult(oracleForContext(reportNumber, context), state.selected, reportNumber);
+    const reveal = () => showResult(divination, state.selected, reportNumber);
     if (prefersReducedMotion()) { reveal(); return; }
     startCasting();
     scheduleCastPhase('ink', 180);
@@ -301,11 +328,45 @@ function initialiseCastingInterface() {
     castElements.forEach((element) => { element.classList.remove('is-casting'); delete element.dataset.castPhase; });
   }
   window.addEventListener('pagehide', () => { if (casting) state.selected = null; finishCasting(); });
-  function showResult(oracle, meal, ordinal) {
-    $('#result-ordinal').textContent = `第 ${ordinal} 数`; $('#oracle-title').textContent = oracle.title; $('#result-title').textContent = meal.name;
-    $('#meal-meta').textContent = `${meal.source} / ${meal.venue}`; $('#oracle-line').textContent = oracle.line; $('#meal-reason').textContent = meal.reason;
+  function showResult(divination, meal, ordinal) {
+    const { calendar, upper, lower, primary, mutual, movingLine, movingLineLabel, changed, transitionCue, formula } = divination;
+    const setText = (id, value) => { const element = $(`#${id}`); if (element) element.textContent = value; };
+    setText('result-ordinal', `第 ${ordinal} 数`);
+    setText('calendar-context', `${calendar.timeLabel} · 农历${calendar.lunarLabel}`);
+    setText('primary-upper', `${upper.symbol} ${upper.name} · ${upper.element}`);
+    setText('primary-lower', `${lower.symbol} ${lower.name} · ${lower.element}`);
+    setText('primary-name', primary.name);
+    setText('primary-meta', `本卦 · 第 ${primary.number} 卦`);
+    setText('mutual-meta', `互卦 · ${mutual.name} · 第 ${mutual.number} 卦`);
+    setText('moving-line-meta', `动爻 · ${movingLineLabel}`);
+    setText('changed-meta', `变卦 · ${changed.name} · 第 ${changed.number} 卦`);
+    setText('image-reading', `卦意简释：${primary.reading.image}`);
+    setText('food-cue', `食候提示：${primary.reading.foodCue}`);
+    setText('transition-cue', transitionCue);
+    setText('formula-reading', formula);
+    renderYaoStack('primary-lines', primary.lines, movingLine);
+    renderYaoStack('changed-lines', changed.lines);
+    setText('oracle-title', `梅花数时合参 · ${primary.name}`);
+    setText('result-title', meal.name);
+    setText('meal-meta', `${meal.source} / ${meal.venue}`);
+    setText('oracle-line', '本卦参与餐签的确定性排序；餐别、地点与日常均衡规则仍优先。');
+    setText('meal-reason', meal.reason);
     resultCard.classList.remove('is-empty', 'is-revealing'); resultEmpty.hidden = true; resultContent.hidden = false; void resultCard.offsetWidth; resultCard.classList.add('is-revealing');
     announce(`餐卦已显现：${meal.name}，${meal.source}${meal.venue}。`);
+  }
+  function renderYaoStack(id, lines, movingLine = null) {
+    const stack = $(`#${id}`);
+    if (!stack) return;
+    const yao = Array.isArray(lines) ? lines : [];
+    stack.replaceChildren(...yao.map((line, index) => {
+      const item = document.createElement('i');
+      const isYang = line === 1;
+      const isMoving = movingLine === index + 1;
+      item.classList.add(isYang ? 'is-yang' : 'is-yin');
+      if (isMoving) item.classList.add('is-moving');
+      item.setAttribute('aria-label', `第${index + 1}爻，${isYang ? '阳爻' : '阴爻'}${isMoving ? '，动爻' : ''}`);
+      return item;
+    }));
   }
   function confirmMeal() {
     if (!state.selected) return;
