@@ -81,6 +81,7 @@
               <button id="random-number-button" class="random-button" type="button" aria-label="随机生成一至六十四的报数">随机</button>
             </div>
             <p id="number-help">请输入 1-64 的整数</p>
+            <p id="calendar-status" class="calendar-status">按北京时间 · 农历时辰合参</p>
           </div>
           <button id="cast-button" class="cast-button" type="button"><span aria-hidden="true">起</span> 拈数起卦</button>
         </div>
@@ -97,6 +98,36 @@
           <p>数既陈，餐签在此显现。</p>
         </div>
         <div class="result-content" id="result-content" hidden>
+          <section class="hexagram-result" aria-label="梅花易数卦象">
+            <p id="calendar-context" class="calendar-context"></p>
+            <figure class="primary-hexagram" aria-labelledby="primary-name">
+              <div class="primary-hexagram-body">
+                <div id="primary-upper" class="trigram primary-upper"></div>
+                <div id="primary-lines" class="hexagram-lines" aria-label="本卦爻象"></div>
+                <div id="primary-lower" class="trigram primary-lower"></div>
+              </div>
+              <figcaption>
+                <p id="primary-name" class="primary-name"></p>
+                <p id="primary-meta" class="primary-meta"></p>
+              </figcaption>
+            </figure>
+            <div class="hexagram-relations">
+              <p id="mutual-meta" class="mutual-meta"></p>
+              <p id="moving-line-meta" class="moving-line-meta"></p>
+            </div>
+            <figure class="changed-hexagram">
+              <div id="changed-lines" class="hexagram-lines changed-lines" aria-label="变卦爻象"></div>
+              <figcaption>
+                <p id="changed-meta" class="changed-meta"></p>
+              </figcaption>
+            </figure>
+            <section class="hexagram-reading" aria-label="卦象解读">
+              <p id="image-reading" class="image-reading"></p>
+              <p id="food-cue" class="food-cue"></p>
+              <p id="transition-cue" class="transition-cue"></p>
+              <p id="formula-reading" class="formula-reading"></p>
+            </section>
+          </section>
           <p id="oracle-title" class="oracle-title"></p>
           <h2 id="result-title"></h2>
           <p id="meal-meta" class="meal-meta"></p>
