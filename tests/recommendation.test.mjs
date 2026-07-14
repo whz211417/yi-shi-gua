@@ -83,6 +83,7 @@ test('plum-blossom remainder rules map zero to 坤 and the sixth moving line', (
   assert.equal(trigramFromRemainder(0).name, '坤');
   assert.equal(trigramFromRemainder(8).name, '坤');
   assert.equal(normaliseMovingLine(0), 6);
+  assert.throws(() => normaliseMovingLine(2.5), /余数计算参数无效/);
 });
 
 test('deriveDivination produces the documented 谦 example with mutual and changed hexagrams', () => {
@@ -101,6 +102,19 @@ test('deriveDivination produces the documented 谦 example with mutual and chang
 test('deriveDivination is deterministic for injected calendar values', () => {
   const calendar = { lunarMonth: 5, lunarDay: 19, hourBranch: 7, lunarLabel: '五月十九', hourName: '未', timeLabel: '北京时间 13:00 · 未时' };
   assert.deepEqual(deriveDivination(32, calendar), deriveDivination(32, calendar));
+});
+
+test('divination results are defensive copies and cannot corrupt canonical data', () => {
+  const calendar = { lunarMonth: 5, lunarDay: 19, hourBranch: 7 };
+  const altered = deriveDivination(32, calendar);
+  altered.primary.lines[0] = 1;
+  altered.primary.reading.image = '篡改';
+  altered.upper.element = '篡改';
+  const fresh = deriveDivination(32, calendar);
+  assert.equal(fresh.primary.name, '地山谦');
+  assert.deepEqual(fresh.primary.lines, [0, 0, 1, 0, 0, 0]);
+  assert.notEqual(fresh.primary.reading.image, '篡改');
+  assert.equal(fresh.upper.element, '土');
 });
 
 test('Beijing calendar parts use Asia Shanghai rather than the device local time', () => {

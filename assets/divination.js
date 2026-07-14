@@ -11,7 +11,7 @@ const HEXAGRAMS_BY_TRIGRAMS = new Map(HEXAGRAMS.map((hexagram) => [`${hexagram.u
 export function normaliseRemainder(value, modulus) {
   const numericValue = Number(value);
   const numericModulus = Number(modulus);
-  if (!Number.isFinite(numericValue) || !Number.isInteger(numericModulus) || numericModulus < 1) {
+  if (!Number.isInteger(numericValue) || !Number.isInteger(numericModulus) || numericModulus < 1) {
     throw new Error('余数计算参数无效');
   }
   const remainder = ((numericValue % numericModulus) + numericModulus) % numericModulus;
@@ -21,7 +21,7 @@ export function normaliseRemainder(value, modulus) {
 export function trigramFromRemainder(value) {
   const trigram = TRIGRAMS.find((item) => item.remainder === normaliseRemainder(value, 8));
   if (!trigram) throw new Error('八卦余数映射缺失');
-  return trigram;
+  return cloneTrigram(trigram);
 }
 
 export function normaliseMovingLine(value) {
@@ -33,7 +33,7 @@ export function hexagramForTrigrams(upper, lower) {
   const lowerName = trigramName(lower);
   const hexagram = HEXAGRAMS_BY_TRIGRAMS.get(`${upperName}|${lowerName}`);
   if (!hexagram) throw new Error(`未找到${upperName}${lowerName}对应卦象`);
-  return hexagram;
+  return cloneHexagram(hexagram);
 }
 
 export function hexagramForLines(lines) {
@@ -42,7 +42,7 @@ export function hexagramForLines(lines) {
   }
   const hexagram = HEXAGRAMS_BY_LINES.get(lines.join(''));
   if (!hexagram) throw new Error('未找到六爻对应卦象');
-  return hexagram;
+  return cloneHexagram(hexagram);
 }
 
 export function deriveMutualHexagram(lines) {
@@ -130,6 +130,14 @@ export function deriveDivination(reportNumber, calendar) {
     formula: `数时合参：${number} + 农历${safeCalendar.lunarLabel} + ${safeCalendar.hourName}时；上卦取数月日，下卦取数时，动爻取合数余六。`,
     transitionCue: `动爻落于${movingLineLabel}，由${primary.name}转为${changed.name}；本次餐签可保留一处调整的余地。`,
   };
+}
+
+function cloneTrigram(trigram) {
+  return { ...trigram, lines: [...trigram.lines] };
+}
+
+function cloneHexagram(hexagram) {
+  return { ...hexagram, lines: [...hexagram.lines], reading: { ...hexagram.reading } };
 }
 
 function trigramName(value) {
