@@ -4,6 +4,12 @@ import assert from 'node:assert/strict';
 import { STARTER_MEALS, FOOD_ORACLES } from '../assets/data.js';
 import { HEXAGRAMS, TRIGRAMS } from '../assets/hexagrams.js';
 import {
+  beijingCalendarParts,
+  deriveDivination,
+  normaliseMovingLine,
+  trigramFromRemainder,
+} from '../assets/divination.js';
+import {
   chooseMeal,
   contextualSeed,
   dailyBalanceTip,
@@ -71,6 +77,40 @@ test('canonical named examples retain their King Wen identity', () => {
   assert.equal(namesByNumber.get(40), '雷水解');
   assert.equal(namesByNumber.get(63), '水火既济');
   assert.equal(namesByNumber.get(64), '火水未济');
+});
+
+test('plum-blossom remainder rules map zero to 坤 and the sixth moving line', () => {
+  assert.equal(trigramFromRemainder(0).name, '坤');
+  assert.equal(trigramFromRemainder(8).name, '坤');
+  assert.equal(normaliseMovingLine(0), 6);
+});
+
+test('deriveDivination produces the documented 谦 example with mutual and changed hexagrams', () => {
+  const calendar = { lunarMonth: 5, lunarDay: 19, hourBranch: 7, lunarLabel: '五月十九', hourName: '未', timeLabel: '北京时间 13:00 · 未时' };
+  const result = deriveDivination(32, calendar);
+  assert.equal(result.primary.name, '地山谦');
+  assert.equal(result.primary.number, 15);
+  assert.equal(result.movingLine, 3);
+  assert.equal(result.mutual.name, '雷水解');
+  assert.equal(result.mutual.number, 40);
+  assert.equal(result.changed.name, '坤为地');
+  assert.equal(result.changed.number, 2);
+  assert.equal(result.primary.lines.filter((line, index) => line !== result.changed.lines[index]).length, 1);
+});
+
+test('deriveDivination is deterministic for injected calendar values', () => {
+  const calendar = { lunarMonth: 5, lunarDay: 19, hourBranch: 7, lunarLabel: '五月十九', hourName: '未', timeLabel: '北京时间 13:00 · 未时' };
+  assert.deepEqual(deriveDivination(32, calendar), deriveDivination(32, calendar));
+});
+
+test('Beijing calendar parts use Asia Shanghai rather than the device local time', () => {
+  const parts = beijingCalendarParts(new Date('2026-07-14T03:24:00Z'));
+  assert.equal(parts.beijingHour, 11);
+  assert.equal(parts.beijingMinute, 24);
+  assert.equal(parts.hourBranch, 7);
+  assert.equal(parts.hourName, '午');
+  assert.ok(parts.lunarMonth >= 1 && parts.lunarMonth <= 12);
+  assert.ok(parts.lunarDay >= 1 && parts.lunarDay <= 30);
 });
 
 test('starter menu offers 70+ varied editable choices across key meal situations', () => {
