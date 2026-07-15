@@ -305,6 +305,25 @@ test('eight classical Chinese cuisines provide broad, distinct dish taxonomy cov
   }
 });
 
+test('expanded central cuisines retain specific, cuisine-appropriate dish names', () => {
+  const chineseCuisines = DEFAULT_CUISINE_TAXONOMY.中国菜;
+  const dishTypesFor = (cuisine) => Object.values(chineseCuisines[cuisine]).flat();
+
+  assert.deepEqual(
+    dishTypesFor('粤菜').filter((dish) => ['清蒸东星斑', '豉油皇炒面'].includes(dish)),
+    ['清蒸东星斑', '豉油皇炒面'],
+  );
+  assert.deepEqual(
+    dishTypesFor('湘菜').filter((dish) => ['湘西土匪猪肝', '擂钵茄子', '湘西腊猪耳', '湘西酸萝卜', '衡阳鱼头豆腐汤', '湘西酸萝卜老鸭汤'].includes(dish)),
+    ['湘西土匪猪肝', '擂钵茄子', '湘西腊猪耳', '湘西酸萝卜', '衡阳鱼头豆腐汤', '湘西酸萝卜老鸭汤'],
+  );
+
+  const weakLabels = ['广州炒河粉', '清蒸鱼', '湘西外婆菜', '凉拌木耳', '凉拌猪耳', '酸辣黄瓜', '苦瓜排骨汤', '莲藕排骨汤'];
+  for (const cuisine of ['粤菜', '湘菜']) {
+    assert.ok(dishTypesFor(cuisine).every((dish) => !weakLabels.includes(dish)), `${cuisine} must not retain generic or duplicate-ish labels`);
+  }
+});
+
 test('cuisine taxonomy gives legacy meals a coherent fallback without losing legacy data', () => {
   const legacy = meal('legacy', { meals: ['午餐'], metadata: { source: 'old-menu' } });
   const normalised = normaliseCuisineFields(legacy);
