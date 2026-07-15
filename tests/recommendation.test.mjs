@@ -287,6 +287,24 @@ test('food oracle map has 64 gentle entertainment-only entries', () => {
   }
 });
 
+test('eight classical Chinese cuisines provide broad, distinct dish taxonomy coverage', () => {
+  const classicalCuisines = ['川菜', '粤菜', '湘菜', '鲁菜', '苏菜', '浙菜', '闽菜', '徽菜'];
+  const chineseCuisines = DEFAULT_CUISINE_TAXONOMY.中国菜;
+
+  assert.deepEqual(
+    Object.keys(chineseCuisines).filter((cuisine) => classicalCuisines.includes(cuisine)),
+    classicalCuisines,
+    'coverage applies to exactly the eight named classical cuisines',
+  );
+  for (const cuisine of classicalCuisines) {
+    const families = chineseCuisines[cuisine];
+    const dishTypes = Object.values(families).flat();
+    assert.ok(Object.keys(families).length >= 4, `${cuisine} must provide at least four course families`);
+    assert.ok(dishTypes.length >= 40, `${cuisine} must provide at least 40 dish types`);
+    assert.equal(new Set(dishTypes).size, dishTypes.length, `${cuisine} dish types must be distinct`);
+  }
+});
+
 test('cuisine taxonomy gives legacy meals a coherent fallback without losing legacy data', () => {
   const legacy = meal('legacy', { meals: ['午餐'], metadata: { source: 'old-menu' } });
   const normalised = normaliseCuisineFields(legacy);
