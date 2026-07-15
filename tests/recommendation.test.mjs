@@ -305,6 +305,17 @@ test('eight classical Chinese cuisines provide broad, distinct dish taxonomy cov
   }
 });
 
+test('eight classical cuisines have no cross-cuisine duplicates or forbidden generic labels', () => {
+  const classicalCuisines = ['川菜', '粤菜', '湘菜', '鲁菜', '苏菜', '浙菜', '闽菜', '徽菜'];
+  const dishTypes = classicalCuisines.flatMap((cuisine) => Object.values(DEFAULT_CUISINE_TAXONOMY.中国菜[cuisine]).flat());
+  const duplicateDishTypes = [...new Set(dishTypes.filter((dish, index) => dishTypes.indexOf(dish) !== index))];
+
+  assert.deepEqual(duplicateDishTypes, [], 'dish types must be unique across the eight classical cuisines');
+  for (const dish of ['清炒虾仁', '砂锅鱼头', '徽州炒饭']) {
+    assert.ok(!dishTypes.includes(dish), `forbidden generic label must be absent: ${dish}`);
+  }
+});
+
 test('expanded central cuisines retain specific, cuisine-appropriate dish names', () => {
   const chineseCuisines = DEFAULT_CUISINE_TAXONOMY.中国菜;
   const dishTypesFor = (cuisine) => Object.values(chineseCuisines[cuisine]).flat();
