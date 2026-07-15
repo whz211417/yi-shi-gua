@@ -183,6 +183,9 @@ test('layered meal template catalog supplies valid Chinese and world cuisine cov
   assert.ok(worldTemplates.length >= 70, 'catalog should contain at least 70 world templates');
   assert.ok(chineseTemplates.every(({ enabled }) => enabled === true), 'Chinese templates must be enabled');
   assert.ok(worldTemplates.every(({ enabled }) => enabled === false), 'world templates must be disabled');
+  assert.ok(MEAL_TEMPLATES.length >= 940, 'expanded catalog must provide at least 940 stable templates');
+  assert.ok(chineseTemplates.length >= 580, 'expanded catalog must provide at least 580 Chinese templates');
+  assert.ok(worldTemplates.length >= 360, 'expanded catalog must provide at least 360 world templates');
   assert.equal(new Set(MEAL_TEMPLATES.map(({ id }) => id)).size, MEAL_TEMPLATES.length, 'template ids must be unique');
   assert.equal(new Set(MEAL_TEMPLATES.map(({ name }) => name)).size, MEAL_TEMPLATES.length, 'template names must be unique');
 
