@@ -313,7 +313,8 @@ function initialiseCastingInterface() {
   if (![numberInput, randomButton, castButton, retryButton, confirmButton, resultCard, resultEmpty, resultContent, liveRegion, dateStamp, calendarStatus, balanceTip, menuOpenButton, menuCloseButton, menuPanel, menuList, addMealButton, resetMenuButton].every(Boolean)) return;
   const today = new Date(); const date = todayKey(today); const saved = loadStoredState(safeStorage());
   const state = { menu: saved.menu, recordsByDate: saved.recordsByDate, rejectedIds: [], selected: null };
-  let menuFilters = initialMenuFilters();
+  // The catalog opens in the Chinese-cuisine scope; world entries are never mixed into this first directory view.
+  let menuFilters = { ...initialMenuFilters(), zone: '中国菜' };
   dateStamp.textContent = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' }).format(today);
   try {
     const calendar = beijingCalendarParts(today);
