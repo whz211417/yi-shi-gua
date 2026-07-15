@@ -24,6 +24,7 @@ import {
   contextualSeed,
   dailyBalanceTip,
   initialMenuFilters,
+  filtersForMenuScope,
   loadStoredState,
   newMeal,
   normaliseMenu,
@@ -296,6 +297,13 @@ test('menu filters use the catalog helpers and reduce dependent selections witho
   assert.deepEqual(reduceMenuFilters(afterZone, { type: 'enabledOnly', value: false }), { ...afterZone, enabledOnly: false });
   assert.deepEqual(reduceMenuFilters(afterZone, { type: 'query', value: ' Cafe\u0301 ' }), { ...afterZone, query: 'Café' });
   assert.deepEqual(reduceMenuFilters(afterZone, { type: 'clear' }), initialMenuFilters());
+});
+
+test('scope tabs produce strict Chinese, world, and enabled-only filter states', () => {
+  assert.deepEqual(filtersForMenuScope('中国菜'), { zone: '中国菜', cuisine: '', family: '', enabledOnly: false, query: '' });
+  assert.deepEqual(filtersForMenuScope('世界料理'), { zone: '世界料理', cuisine: '', family: '', enabledOnly: false, query: '' });
+  assert.deepEqual(filtersForMenuScope('我的启用'), { zone: '', cuisine: '', family: '', enabledOnly: true, query: '' });
+  assert.deepEqual(filtersForMenuScope('unexpected'), initialMenuFilters());
 });
 
 test('food oracle map has 64 gentle entertainment-only entries', () => {
