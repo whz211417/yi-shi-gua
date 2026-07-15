@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { STARTER_MEALS, FOOD_ORACLES } from '../assets/data.js';
+import { MEAL_TEMPLATES } from '../assets/meal-templates.js';
 import {
+  DEFAULT_CUISINE_TAXONOMY,
   FALLBACK_TAXONOMY,
   availableCuisineOptions,
   cuisinePath,
@@ -168,6 +170,69 @@ test('starter menu offers 70+ varied editable choices across key meal situations
       assert.ok(Object.hasOwn(meal, key), `${meal.name} is missing ${key}`);
     }
   }
+});
+
+test('layered meal template catalog supplies valid Chinese and world cuisine coverage', () => {
+  assert.ok(MEAL_TEMPLATES.length >= 210, 'template catalog should contain at least 210 choices');
+  const chineseTemplates = MEAL_TEMPLATES.filter(({ cuisineZone }) => cuisineZone === '中国菜');
+  const worldTemplates = MEAL_TEMPLATES.filter(({ cuisineZone }) => cuisineZone !== '中国菜');
+  assert.ok(chineseTemplates.length >= 140, 'catalog should contain at least 140 Chinese templates');
+  assert.ok(worldTemplates.length >= 70, 'catalog should contain at least 70 world templates');
+  assert.ok(chineseTemplates.every(({ enabled }) => enabled === true), 'Chinese templates must be enabled');
+  assert.ok(worldTemplates.every(({ enabled }) => enabled === false), 'world templates must be disabled');
+  assert.equal(new Set(MEAL_TEMPLATES.map(({ id }) => id)).size, MEAL_TEMPLATES.length, 'template ids must be unique');
+  assert.equal(new Set(MEAL_TEMPLATES.map(({ name }) => name)).size, MEAL_TEMPLATES.length, 'template names must be unique');
+
+  const validSources = new Set(['食堂', '校外']);
+  const validPeriods = new Set(['早餐', '午餐', '晚餐']);
+  const validStaples = new Set(['米饭', '粉类', '面食', '粥类']);
+  const validProteins = new Set(['鸡肉', '牛肉', '猪肉', '鱼虾', '蛋类', '豆制品', '无明确蛋白']);
+  const validVegetables = new Set(['有', '少', '无']);
+  const validFlavors = new Set(['清淡', '普通', '汤类', '重口', '油炸']);
+  const validPaths = new Set(Object.entries(DEFAULT_CUISINE_TAXONOMY).flatMap(([cuisineZone, cuisines]) => (
+    Object.entries(cuisines).flatMap(([cuisine, families]) => (
+      Object.entries(families).flatMap(([courseFamily, dishTypes]) => (
+        dishTypes.map((dishType) => [cuisineZone, cuisine, courseFamily, dishType].join('\u0000'))
+      ))
+    ))
+  )));
+
+  for (const template of MEAL_TEMPLATES) {
+    for (const key of ['id', 'name', 'source', 'venue', 'meals', 'staple', 'protein', 'vegetable', 'flavor', 'enabled', 'cuisineZone', 'cuisine', 'courseFamily', 'dishType']) {
+      assert.ok(Object.hasOwn(template, key), `${template.name} is missing ${key}`);
+    }
+    assert.ok(validSources.has(template.source), `${template.name} has invalid source`);
+    assert.ok(Array.isArray(template.meals) && template.meals.length > 0 && template.meals.every((period) => validPeriods.has(period)), `${template.name} has invalid periods`);
+    assert.ok(validStaples.has(template.staple), `${template.name} has invalid staple`);
+    assert.ok(validProteins.has(template.protein), `${template.name} has invalid protein`);
+    assert.ok(validVegetables.has(template.vegetable), `${template.name} has invalid vegetable value`);
+    assert.ok(validFlavors.has(template.flavor), `${template.name} has invalid flavor`);
+    assert.ok(validPaths.has([template.cuisineZone, template.cuisine, template.courseFamily, template.dishType].join('\u0000')), `${template.name} has an invalid taxonomy path`);
+  }
+  assert.equal(new Set(MEAL_TEMPLATES.map(({ meals }) => meals)).size, MEAL_TEMPLATES.length, 'templates must not share mutable meal-period arrays');
+
+  for (const cuisine of ['川菜', '粤菜', '湘菜', '鲁菜', '苏菜', '浙菜', '闽菜', '徽菜', '京津菜', '东北菜', '西北菜', '云南菜', '贵州菜', '潮汕菜', '客家菜', '港式', '台式', '素食', '清真风味', '地方小吃', '中式日常']) {
+    assert.ok(chineseTemplates.some((template) => template.cuisine === cuisine), `missing Chinese cuisine ${cuisine}`);
+  }
+  for (const cuisine of ['日料', '韩餐', '泰餐', '越南菜', '马来 / 新加坡风味', '印尼菜', '印度菜', '意餐', '法餐', '西式简餐', '墨西哥菜', '美式餐', '土耳其', '中东风味', '地中海料理', '轻食沙拉', '三明治汉堡', '咖啡烘焙']) {
+    assert.ok(worldTemplates.some((template) => template.cuisine === cuisine), `missing world cuisine ${cuisine}`);
+  }
+  for (const mealPeriod of ['早餐', '午餐', '晚餐']) assert.ok(chineseTemplates.some(({ meals }) => meals.includes(mealPeriod)), `missing Chinese ${mealPeriod}`);
+  for (const source of ['食堂', '校外']) assert.ok(chineseTemplates.some((template) => template.source === source), `missing Chinese ${source} template`);
+  for (const staple of ['米饭', '粉类', '面食', '粥类']) assert.ok(chineseTemplates.some((template) => template.staple === staple), `missing Chinese ${staple} template`);
+  for (const flavor of ['汤类', '油炸']) assert.ok(chineseTemplates.some((template) => template.flavor === flavor), `missing Chinese ${flavor} template`);
+  assert.ok(chineseTemplates.some((template) => template.venue === '校园食堂模板'), 'missing food-hall template');
+  assert.ok(chineseTemplates.some((template) => template.venue === '校外模板'), 'missing off-campus template');
+  const chineseNames = chineseTemplates.map(({ name }) => name).join(' / ');
+  for (const [label, pattern] of [
+    ['dumpling or bun', /饺|包/],
+    ['stir-fry', /炒/],
+    ['soup or casserole', /汤|羹|锅/],
+    ['hotpot or malatang', /火锅|麻辣烫/],
+    ['grilled or fried', /烤|炸|煎/],
+    ['dim sum or dessert', /虾饺|烧卖|肠粉|糕|甜/],
+  ]) assert.match(chineseNames, pattern, `missing Chinese ${label} template`);
+  assert.ok(chineseTemplates.some((template) => template.cuisine === '素食' && template.flavor === '清淡'), 'missing light vegetarian template');
 });
 
 test('food oracle map has 64 gentle entertainment-only entries', () => {
