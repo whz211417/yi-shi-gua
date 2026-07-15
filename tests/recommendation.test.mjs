@@ -7,7 +7,10 @@ import { MEAL_TEMPLATES } from '../assets/meal-templates.js';
 import {
   CANTEEN_PLANS,
   WEATHER_OPTIONS,
+  dietaryTendencyForTrigrams,
   normaliseStudentWeather,
+  recommendCanteenPlan,
+  scoreStudentPlan,
 } from '../assets/student-meal-model.js';
 import {
   DEFAULT_CUISINE_TAXONOMY,
@@ -77,6 +80,78 @@ test('canteen plans provide universal complete meals rather than campus availabi
   const fastFood = plansByCategory.get('炸鸡/汉堡');
   assert.match(fastFood.dishSuggestions.join('、'), /蔬菜|沙拉|汤/, 'fast food must pair with vegetables or soup');
   assert.ok(CANTEEN_PLANS.every((plan) => !/^(甜品|咖啡|零食)$/.test(plan.category)), 'dessert, coffee, and snacks cannot be standalone plans');
+});
+
+test('trigram dietary tendencies provide transparent tags for every trigram', () => {
+  const tendencies = dietaryTendencyForTrigrams({ upper: '坎', lower: '离' });
+  assert.deepEqual(tendencies, [
+    { trigram: '坎', tendency: '温润汤羹' },
+    { trigram: '离', tendency: '鲜香明快' },
+  ]);
+
+  const allTendencies = new Map(
+    ['坎', '离', '震', '巽', '艮', '兑', '乾', '坤'].map((trigram) => [
+      trigram,
+      dietaryTendencyForTrigrams({ upper: trigram, lower: trigram })[0].tendency,
+    ]),
+  );
+  assert.deepEqual(Object.fromEntries(allTendencies), {
+    坎: '温润汤羹',
+    离: '鲜香明快',
+    震: '快捷',
+    巽: '清爽蔬菜',
+    艮: '稳妥克制',
+    兑: '适度改善/分享',
+    乾: '蛋白耐饱',
+    坤: '均衡家常',
+  });
+});
+
+test('weather and trigrams score canteen plans without hard-deleting valid options', () => {
+  const soupPlan = CANTEEN_PLANS.find((plan) => plan.id === 'universal-hot-soup-meal');
+  const lightPlan = CANTEEN_PLANS.find((plan) => plan.id === 'universal-light-meal');
+  const base = { upper: '坎', lower: '巽', mealPeriod: '午餐', recentRecords: [], seed: 'stable-seed' };
+
+  assert.ok(
+    scoreStudentPlan(soupPlan, { ...base, weather: '寒冷/雨雪' }).score
+      > scoreStudentPlan(soupPlan, { ...base, weather: '晴热' }).score,
+    'cold weather should favor a warm soup plan',
+  );
+  assert.ok(
+    scoreStudentPlan(lightPlan, { ...base, weather: '晴热' }).score
+      > scoreStudentPlan(lightPlan, { ...base, weather: '寒冷/雨雪' }).score,
+    'hot weather should favor a light vegetable plan',
+  );
+  const lunchPlans = CANTEEN_PLANS.filter((plan) => plan.meals.includes('午餐'));
+  for (const weather of WEATHER_OPTIONS) {
+    const scored = lunchPlans.map((plan) => scoreStudentPlan(plan, { ...base, weather }));
+    assert.ok(scored.every(({ eligible, score }) => eligible && Number.isFinite(score)), `${weather} must leave all lunch plans scoreable`);
+    assert.ok(recommendCanteenPlan({ ...base, weather }).plan, `${weather} must leave a recommendation available`);
+  }
+});
+
+test('canteen recommendation is deterministic, practical, and explains its limited template role', () => {
+  const context = {
+    primary: { upper: '坎', lower: '巽' },
+    weather: '雨天',
+    mealPeriod: '午餐',
+    recentRecords: [{ id: 'universal-hot-soup-meal', name: '汤饭汤面：热汤主食套餐', mealPeriod: '午餐' }],
+    seed: '2026-07-15-42',
+  };
+  const first = recommendCanteenPlan(context);
+  const second = recommendCanteenPlan(context);
+
+  assert.deepEqual(first, second, 'identical context must have an identical recommendation');
+  assert.ok(CANTEEN_PLANS.some((plan) => plan.id === first.plan.id));
+  assert.ok(first.dishSuggestions.length >= 2 && first.dishSuggestions.length <= 4);
+  assert.equal(first.fallbacks.length, 2);
+  assert.equal(first.fallbackPlans.length, 2);
+  assert.ok(first.fallbackPlans.every((plan) => CANTEEN_PLANS.some(({ id }) => id === plan.id)));
+  assert.deepEqual(first.reasons.map(({ label }) => label), ['卦象取向', '现实修正', '落地替代']);
+  assert.match(first.disclaimer, /娱乐|通用模板|实际食堂当日供应/);
+  assert.equal(first.isEntertainment, true);
+  assert.equal(first.isUniversalTemplate, true);
+  assert.notEqual(first.plan.id, 'universal-hot-soup-meal', 'a newest recent repeat receives a soft penalty when alternatives exist');
 });
 
 test('trigram export preserves the eight strict remainder rows and order', () => {

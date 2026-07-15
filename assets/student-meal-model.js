@@ -19,6 +19,154 @@ export function normaliseStudentWeather(weather) {
   return LEGACY_WEATHER_MAP.get(value) ?? '晴暖';
 }
 
+// These are entertainment-oriented dietary directions, not health advice.
+// The wording is deliberately compact so the eventual UI can show why a plan
+// was ranked without presenting the trigram as a nutrition or supply oracle.
+const TRIGRAM_DIETARY_TENDENCIES = Object.freeze({
+  坎: '温润汤羹',
+  离: '鲜香明快',
+  震: '快捷',
+  巽: '清爽蔬菜',
+  艮: '稳妥克制',
+  兑: '适度改善/分享',
+  乾: '蛋白耐饱',
+  坤: '均衡家常',
+});
+
+const DEFAULT_MEAL_PERIOD = '午餐';
+const RECENT_RECORD_LIMIT = 5;
+
+function primaryTrigrams(primaryOrUpper, lower) {
+  if (typeof primaryOrUpper === 'string') return { upper: primaryOrUpper, lower };
+  const primary = primaryOrUpper?.primary ?? primaryOrUpper ?? {};
+  return { upper: primary.upper, lower: primary.lower };
+}
+
+function normaliseMealPeriod(mealPeriod) {
+  return ['早餐', '午餐', '晚餐'].includes(mealPeriod) ? mealPeriod : DEFAULT_MEAL_PERIOD;
+}
+
+function normaliseRecentRecords(records) {
+  if (!Array.isArray(records)) return [];
+  // Records are newest-first, matching the persisted food-log ordering.
+  return records.slice(0, RECENT_RECORD_LIMIT).filter((record) => record && typeof record === 'object');
+}
+
+function stableSeedValue(seed, planId) {
+  const text = `${String(seed ?? '')}|${planId}`;
+  let value = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    value ^= text.charCodeAt(index);
+    value = Math.imul(value, 16777619);
+  }
+  return (value >>> 0) / 0x100000000;
+}
+
+function clonePlan(plan) {
+  return {
+    ...plan,
+    meals: [...plan.meals],
+    dishSuggestions: [...plan.dishSuggestions],
+    suggestions: [...plan.suggestions],
+    fallbacks: [...plan.fallbacks],
+    alternatives: [...plan.alternatives],
+    weatherTags: [...plan.weatherTags],
+    trigramTags: [...plan.trigramTags],
+  };
+}
+
+/**
+ * Returns the transparent dietary tendencies associated with a primary
+ * hexagram's upper and lower trigrams. It accepts either { upper, lower },
+ * { primary: { upper, lower } }, or (upper, lower) for adapter convenience.
+ */
+export function dietaryTendencyForTrigrams(primaryOrUpper, lower) {
+  const trigrams = primaryTrigrams(primaryOrUpper, lower);
+  return [trigrams.upper, trigrams.lower]
+    .filter((trigram) => Object.hasOwn(TRIGRAM_DIETARY_TENDENCIES, trigram))
+    .map((trigram) => ({ trigram, tendency: TRIGRAM_DIETARY_TENDENCIES[trigram] }));
+}
+
+/**
+ * Scores one universal canteen plan without mutating either the plan or
+ * context. Weather tags and trigram tags only add preferences: they never
+ * remove a valid meal-period candidate. Recent records are newest-first and
+ * receive a bounded, soft repeat penalty; `seed` resolves otherwise equal
+ * candidates reproducibly.
+ */
+export function scoreStudentPlan(plan, context = {}) {
+  if (!plan || typeof plan !== 'object') {
+    return { eligible: false, score: Number.NEGATIVE_INFINITY, breakdown: {} };
+  }
+
+  const { upper, lower } = primaryTrigrams(context);
+  const mealPeriod = normaliseMealPeriod(context.mealPeriod);
+  const weather = normaliseStudentWeather(context.weather);
+  const recentRecords = normaliseRecentRecords(context.recentRecords);
+  const mealScore = Array.isArray(plan.meals) && plan.meals.includes(mealPeriod) ? 8 : -100;
+  const weatherScore = Array.isArray(plan.weatherTags) && plan.weatherTags.includes(weather) ? 6 : 0;
+  const trigramMatches = [upper, lower].filter((trigram) => Array.isArray(plan.trigramTags) && plan.trigramTags.includes(trigram)).length;
+  const trigramScore = trigramMatches * 4;
+  const recentRepeatIndex = recentRecords.findIndex((record) => record.id === plan.id || record.name === plan.name);
+  const recentRepeatPenalty = recentRepeatIndex === -1 ? 0 : 10 - recentRepeatIndex;
+  const tieBreaker = stableSeedValue(context.seed, plan.id);
+
+  return {
+    eligible: mealScore > 0,
+    score: mealScore + weatherScore + trigramScore - recentRepeatPenalty + tieBreaker,
+    breakdown: {
+      mealScore,
+      weatherScore,
+      trigramScore,
+      recentRepeatPenalty,
+      tieBreaker,
+    },
+  };
+}
+
+/**
+ * Recommends a generic, complete canteen plan. This does not claim a campus
+ * has a particular window or dish; callers must check the day's actual supply.
+ */
+export function recommendCanteenPlan(context = {}) {
+  const mealPeriod = normaliseMealPeriod(context.mealPeriod);
+  const weather = normaliseStudentWeather(context.weather);
+  const tendencies = dietaryTendencyForTrigrams(context);
+  const candidates = CANTEEN_PLANS
+    .filter((plan) => plan.meals.includes(mealPeriod))
+    .map((plan) => ({ plan, ...scoreStudentPlan(plan, { ...context, mealPeriod, weather }) }))
+    .sort((left, right) => right.score - left.score || left.plan.id.localeCompare(right.plan.id));
+  const [selected, ...remaining] = candidates;
+
+  if (!selected) return null;
+
+  const plan = clonePlan(selected.plan);
+  const fallbackPlans = remaining.slice(0, 2).map(({ plan: fallbackPlan }) => clonePlan(fallbackPlan));
+  const tendencyText = tendencies.length > 0
+    ? tendencies.map(({ trigram, tendency }) => `${trigram}卦偏向${tendency}`).join('；')
+    : '未提供有效上下卦，按通用均衡餐型排序';
+  const weatherText = plan.weatherTags.includes(weather)
+    ? `${weather}时此餐型更贴合通用口味偏好`
+    : `${weather}仅作轻度排序，不排除这份完整餐`;
+
+  return {
+    plan,
+    dishSuggestions: plan.dishSuggestions.slice(0, 4),
+    fallbacks: plan.fallbacks.slice(0, 2),
+    fallbackPlans,
+    tendencies,
+    score: selected.score,
+    reasons: [
+      { label: '卦象取向', text: tendencyText },
+      { label: '现实修正', text: `${weatherText}；${mealPeriod}仅保留可作为完整一餐的通用方案，并避开最近的软重复。` },
+      { label: '落地替代', text: `若${plan.window}当日无供应，可改选${fallbackPlans.map((fallbackPlan) => fallbackPlan.name).join('或')}，并按实际窗口调整。` },
+    ],
+    disclaimer: '娱乐性饮食提示：这是通用食堂模板，不代表实际食堂当日供应，请以现场窗口和个人情况为准。',
+    isEntertainment: true,
+    isUniversalTemplate: true,
+  };
+}
+
 const UNIVERSAL_SOURCE = '通用模板（非实际校园供应）';
 const UNIVERSAL_AVAILABILITY = '通用模板，以实际食堂当日供应为准';
 
