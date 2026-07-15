@@ -388,6 +388,14 @@ test('default recommendations exclude disabled world templates, while manually e
   }
 });
 
+test('supplement templates never become standalone default recommendations', () => {
+  for (const place of ['在学校', '不想走远', '校外']) {
+    const result = chooseMeal({ mealPeriod: '早餐', place, seed: 2 });
+    assert.ok(result.meal, `${place} should still have a breakfast recommendation`);
+    assert.notEqual(result.meal.isSupplement, true, `${place} should not recommend a supplement as the complete meal`);
+  }
+});
+
 test('chooseMeal strongly avoids an immediately repeated meal, staple, and protein when alternatives exist', () => {
   const meals = [
     meal('rice-chicken', { staple: '米饭', protein: '鸡肉' }),

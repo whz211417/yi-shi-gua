@@ -143,7 +143,7 @@ export function chooseMeal(context = {}) {
   const meals = normaliseMenu(safeContext.meals);
   const recent = normaliseRecent(safeContext.recent);
   const rejectedIds = new Set(Array.isArray(safeContext.rejectedIds) ? safeContext.rejectedIds : []);
-  const eligible = meals.filter((meal) => meal.enabled !== false && meal.meals.includes(safeContext.mealPeriod) && matchesPlace(meal, safeContext.place) && !rejectedIds.has(meal.id));
+  const eligible = meals.filter((meal) => meal.enabled !== false && meal.isSupplement !== true && meal.meals.includes(safeContext.mealPeriod) && matchesPlace(meal, safeContext.place) && !rejectedIds.has(meal.id));
   if (eligible.length === 0) return { meal: null, score: null, reason: '当前条件下没有可用餐品，请切换地点、餐别或调整菜单库。', relaxed: false };
   const recentTwo = recent.slice(0, 2);
   const nonRepeating = eligible.filter((meal) => !recentTwo.some((record) => repeatsCore(record, meal)));
