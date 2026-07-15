@@ -532,6 +532,10 @@ h1 span { display: block; white-space: nowrap; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
 @media (min-width: 700px) {
+  .menu-filters { grid-template-columns: 1.1fr 1fr 1fr auto; align-items: end; }
+  .menu-filter-zone { grid-column: span 2; }
+  .menu-filter-search { grid-column: span 2; }
+  .menu-filter-summary:empty { display: none; }
   .page-shell { padding: 24px 48px 48px; }
   .hero {
     grid-template-columns: minmax(0, 1.18fr) minmax(225px, .62fr);

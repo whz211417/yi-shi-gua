@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { STARTER_MEALS, FOOD_ORACLES } from '../assets/data.js';
 import { MEAL_TEMPLATES } from '../assets/meal-templates.js';
@@ -237,6 +238,21 @@ test('layered meal template catalog supplies valid Chinese and world cuisine cov
     ['dim sum or dessert', /虾饺|烧卖|肠粉|糕|甜/],
   ]) assert.match(chineseNames, pattern, `missing Chinese ${label} template`);
   assert.ok(chineseTemplates.some((template) => template.cuisine === '素食' && template.flavor === '清淡'), 'missing light vegetarian template');
+});
+
+test('menu filter static contract keeps cuisine controls inside the menu panel', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const panel = html.slice(html.indexOf('<aside id="menu-panel"'));
+  for (const id of ['menu-filter-zone', 'menu-filter-cuisine', 'menu-filter-family', 'menu-filter-enabled', 'menu-filter-query', 'menu-filter-clear', 'menu-filter-summary']) {
+    assert.equal((html.match(new RegExp(`id="${id}"`, 'g')) || []).length, 1, `${id} must be unique`);
+    assert.ok(panel.includes(`id="${id}"`), `${id} must stay in the menu panel`);
+  }
+  assert.match(panel, /value="中国菜"><span>中国菜<\/span>/);
+  assert.doesNotMatch(html.slice(0, html.indexOf('<aside id="menu-panel"')), /cuisine-preference|cast-cuisine|home-cuisine-filter/);
+  assert.doesNotMatch(panel, /menu-filter-dish-type/);
+  const css = readFileSync(new URL('../assets/style.css', import.meta.url), 'utf8');
+  assert.match(css, /\.menu-filters/);
+  assert.match(css, /@media \(max-width: 699px\)[\s\S]*\.menu-filters/);
 });
 
 test('food oracle map has 64 gentle entertainment-only entries', () => {
