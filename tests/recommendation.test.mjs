@@ -385,14 +385,25 @@ test('East and Southeast Asian cuisines provide broad, distinct dish taxonomy co
   }
 });
 
-test('South Asian, European and American cuisines provide broad, distinct dish taxonomy coverage', () => {
-  const cuisines = ['印度菜', '意餐', '法餐', '西式简餐', '墨西哥菜', '美式餐'];
-  for (const cuisine of cuisines) {
+test('South Asian, European and American cuisines provide concrete, distinct dish taxonomy coverage', () => {
+  const examples = {
+    印度菜: ['罗根乔什', '海得拉巴羊肉比尔亚尼', '玛萨拉多萨'],
+    意餐: ['博洛尼亚肉酱宽面', '米兰炸肉排', '阿兰奇炸饭团'],
+    法餐: ['勃艮第牛肉', '马赛鱼汤', '洛林咸派'],
+    西式简餐: ['牛肉牧羊人派', '考伯沙拉', '新英格兰蛤蜊浓汤'],
+    墨西哥菜: ['阿尔帕斯托塔可', '波布拉诺酱鸡肉', '绿酱鸡肉玉米片'],
+    美式餐: ['俄克拉何马洋葱汉堡', '德州烟熏牛胸肉', '鸡肉华夫饼'],
+  };
+  const genericLabels = new Set(['意大利面', '焗饭', '烤鸡', '牛排', '玉米片', '烤玉米', '松饼', '早餐培根', '香料饭', '咖喱羊肉']);
+
+  for (const cuisine of Object.keys(examples)) {
     const families = Object.values(DEFAULT_CUISINE_TAXONOMY).flatMap((zone) => Object.entries(zone)).find(([name]) => name === cuisine)?.[1];
     const dishes = Object.values(families).flat();
     assert.ok(Object.keys(families).length >= 4, `${cuisine} must provide at least four course families`);
     assert.ok(dishes.length >= 20, `${cuisine} must provide at least 20 dish types`);
     assert.equal(new Set(dishes).size, dishes.length, `${cuisine} dish types must be distinct`);
+    for (const dish of examples[cuisine]) assert.ok(dishes.includes(dish), `${cuisine} is missing concrete dish ${dish}`);
+    assert.ok(dishes.every((dish) => !genericLabels.has(dish)), `${cuisine} must not use generic filler labels`);
   }
 });
 
