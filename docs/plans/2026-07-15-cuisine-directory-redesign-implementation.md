@@ -10,9 +10,9 @@
 
 ---
 
-## Task 1: 扩展权威 taxonomy 到每菜系至少 11 至 12 个具体菜品
+## Task 1: 扩展权威 taxonomy 到八大菜系 40 道、其余中国与世界菜系 20 道
 
-**Objective:** 用真实、明确、可解释的菜名扩充 39 个菜系，保证每个菜系至少有三类有意义的大类。
+**Objective:** 用真实、明确、可解释的菜名扩充 39 个菜系，达到八大菜系每类至少 40 道、其他中国与世界菜系每类至少 20 道，并保证每个菜系至少有四类有意义的大类。
 
 **Files:**
 - Modify: `assets/cuisine-catalog.js:2-58`
@@ -20,7 +20,7 @@
 
 **Step 1: Write failing coverage tests**
 
-添加按菜系统计的断言。中国菜每个 cuisine 至少 12 个 distinct `dishType`，世界料理每个 cuisine 至少 11 个；每个 cuisine 至少覆盖 3 个 `courseFamily`。同时断言中国菜正好 21 类、世界料理合计正好 18 类。
+添加按菜系统计的断言。八大菜系每个 cuisine 至少 40 个 distinct `dishType`；其他中国菜系和每个世界菜系至少 20 个；每个 cuisine 至少覆盖 4 个 `courseFamily`。同时断言中国菜正好 21 类、世界料理合计正好 18 类。
 
 ```js
 const paths = taxonomyPaths(DEFAULT_CUISINE_TAXONOMY);
@@ -63,7 +63,7 @@ git commit -m "feat: enrich cuisine taxonomy coverage"
 
 ---
 
-## Task 2: 从扩展 taxonomy 生成至少 450 项稳定模板
+## Task 2: 从扩展 taxonomy 生成至少 940 项稳定模板
 
 **Objective:** 让模板数量、启用默认值、稳定 ID 和语义元数据随扩展 taxonomy 正确生成。
 
@@ -73,7 +73,7 @@ git commit -m "feat: enrich cuisine taxonomy coverage"
 
 **Step 1: Write failing data tests**
 
-断言 `MEAL_TEMPLATES.length >= 450`；中国菜至少 252 项且全部初始启用；世界料理至少 198 项且全部初始停用。逐菜系验证条目数量与 taxonomy 一致，所有 ID/名称唯一、路径有效、没有共享 `meals` 数组。
+断言 `MEAL_TEMPLATES.length >= 940`；中国菜至少 580 项且全部初始启用；世界料理至少 360 项且全部初始停用。逐菜系验证八大菜系至少 40 项、其他菜系至少 20 项，所有 ID/名称唯一、路径有效、没有共享 `meals` 数组。
 
 **Step 2: Run focused test and verify failure**
 
