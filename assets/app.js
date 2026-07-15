@@ -1,6 +1,6 @@
 import { STARTER_MEALS } from './data.js';
 import { FOOD_ORACLES } from './data.js';
-import { normaliseCuisineFields } from './cuisine-catalog.js';
+import { availableCuisineOptions, cuisinePath, filterMealsByCuisine, normaliseCuisineFields } from './cuisine-catalog.js';
 import { beijingCalendarParts, deriveDivination } from './divination.js';
 
 export const STORAGE_KEY = 'yi-shi-gua:v1';
@@ -20,6 +20,39 @@ const VALID_STAPLES = new Set(MENU_OPTIONS.staples);
 const VALID_PROTEINS = new Set(MENU_OPTIONS.proteins);
 const VALID_VEGETABLES = new Set(MENU_OPTIONS.vegetables);
 const VALID_FLAVORS = new Set(MENU_OPTIONS.flavors);
+
+/** Create independent, display-only menu filter state. */
+export function initialMenuFilters() {
+  return { zone: '', cuisine: '', family: '', enabledOnly: false, query: '' };
+}
+
+/** Reduce one menu-filter interaction without altering the caller's state. */
+export function reduceMenuFilters(filters, action) {
+  const current = normaliseMenuFilters(filters);
+  const nextAction = isRecord(action) ? action : {};
+  switch (nextAction.type) {
+    case 'zone': return { ...current, zone: normaliseFilterText(nextAction.value), cuisine: '', family: '' };
+    case 'cuisine': return { ...current, cuisine: normaliseFilterText(nextAction.value), family: '' };
+    case 'family': return { ...current, family: normaliseFilterText(nextAction.value) };
+    case 'enabledOnly': return { ...current, enabledOnly: nextAction.value === true };
+    case 'query': return { ...current, query: normaliseFilterText(nextAction.value) };
+    case 'clear': return initialMenuFilters();
+    default: return current;
+  }
+}
+
+function normaliseMenuFilters(filters) {
+  const source = isRecord(filters) ? filters : {};
+  return {
+    zone: normaliseFilterText(source.zone),
+    cuisine: normaliseFilterText(source.cuisine),
+    family: normaliseFilterText(source.family),
+    enabledOnly: source.enabledOnly === true,
+    query: normaliseFilterText(source.query),
+  };
+}
+
+function normaliseFilterText(value) { return typeof value === 'string' ? value.normalize('NFC').trim() : ''; }
 
 /** Return a local calendar key without using UTC conversion. */
 export function todayKey(date = new Date()) {
@@ -248,9 +281,13 @@ function initialiseCastingInterface() {
   const resultEmpty = $('#result-empty'); const resultContent = $('#result-content'); const liveRegion = $('#live-region'); const dateStamp = $('#today-date'); const calendarStatus = $('#calendar-status'); const balanceTip = $('#daily-balance-tip');
   const menuOpenButton = $('#menu-open-button'); const menuCloseButton = $('#menu-close-button'); const menuPanel = $('#menu-panel'); const menuList = $('#menu-list');
   const addMealButton = $('#add-meal-button'); const resetMenuButton = $('#reset-menu-button');
+  const menuFilterZone = $('#menu-filter-zone'); const menuFilterCuisine = $('#menu-filter-cuisine'); const menuFilterFamily = $('#menu-filter-family');
+  const menuFilterEnabled = $('#menu-filter-enabled'); const menuFilterQuery = $('#menu-filter-query'); const menuFilterClear = $('#menu-filter-clear'); const menuFilterSummary = $('#menu-filter-summary');
+  const menuZoneInputs = menuFilterZone ? [...menuFilterZone.querySelectorAll('input[name="menu-zone"]')] : [];
   if (![numberInput, randomButton, castButton, retryButton, confirmButton, resultCard, resultEmpty, resultContent, liveRegion, dateStamp, calendarStatus, balanceTip, menuOpenButton, menuCloseButton, menuPanel, menuList, addMealButton, resetMenuButton].every(Boolean)) return;
   const today = new Date(); const date = todayKey(today); const saved = loadStoredState(safeStorage());
   const state = { menu: saved.menu, recordsByDate: saved.recordsByDate, rejectedIds: [], selected: null };
+  let menuFilters = initialMenuFilters();
   dateStamp.textContent = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' }).format(today);
   try {
     const calendar = beijingCalendarParts(today);
@@ -281,6 +318,14 @@ function initialiseCastingInterface() {
   });
   addMealButton.addEventListener('click', () => { state.menu.push(newMeal()); persist(); renderMenu(); const first = menuList.querySelector('input'); if (first) first.focus(); });
   resetMenuButton.addEventListener('click', () => { if (window.confirm('确定要恢复起始菜单吗？这会覆盖当前本地菜单。')) { state.menu = normaliseMenu(null); persist(); renderMenu(); announce('菜单已恢复为起始项。'); } });
+  menuZoneInputs.forEach((input) => input.addEventListener('change', () => { if (input.checked) updateMenuFilters({ type: 'zone', value: input.value }); }));
+  menuFilterCuisine?.addEventListener('change', () => updateMenuFilters({ type: 'cuisine', value: menuFilterCuisine.value }));
+  menuFilterFamily?.addEventListener('change', () => updateMenuFilters({ type: 'family', value: menuFilterFamily.value }));
+  menuFilterEnabled?.addEventListener('change', () => updateMenuFilters({ type: 'enabledOnly', value: menuFilterEnabled.checked }));
+  menuFilterQuery?.addEventListener('input', () => updateMenuFilters({ type: 'query', value: menuFilterQuery.value }));
+  menuFilterClear?.addEventListener('click', () => updateMenuFilters({ type: 'clear' }));
+
+  function updateMenuFilters(action) { menuFilters = reduceMenuFilters(menuFilters, action); renderMenu(); }
 
   function safeStorage() { try { return window.localStorage; } catch { return null; } }
   function persist() { if (!saveStoredState(safeStorage(), state)) announce('本地保存不可用，本次修改仍会保留到页面关闭前。'); }
@@ -427,13 +472,52 @@ function initialiseCastingInterface() {
     balanceTip.textContent = dailyBalanceTip([...records.values()]);
   }
   function renderMenu() {
+    const standardVisibleMeals = filterMealsByCuisine(state.menu, menuFilters);
+    const catalogFilters = menuFilters.zone === '世界料理' ? { ...menuFilters, zone: '' } : menuFilters;
+    const scopedMenu = menuFilters.zone === '世界料理'
+      ? state.menu.filter((meal) => normaliseCuisineFields(meal).cuisineZone !== '中国菜')
+      : state.menu;
+    const visibleMeals = menuFilters.zone === '世界料理'
+      ? filterMealsByCuisine(scopedMenu, catalogFilters)
+      : standardVisibleMeals;
+    const options = availableCuisineOptions(scopedMenu, catalogFilters);
     menuList.replaceChildren();
-    state.menu.forEach((meal) => menuList.append(menuRow(meal)));
-    $('#menu-count').textContent = `${state.menu.filter((meal) => meal.enabled).length} 项启用 / ${state.menu.length} 项菜单`;
+    if (visibleMeals.length === 0) {
+      const message = document.createElement('p'); message.className = 'menu-empty-state'; message.textContent = '没有符合当前筛选的餐品。';
+      const clear = document.createElement('button'); clear.type = 'button'; clear.className = 'menu-small-button'; clear.textContent = '清除筛选'; clear.addEventListener('click', () => updateMenuFilters({ type: 'clear' }));
+      menuList.append(message, clear);
+    } else {
+      visibleMeals.forEach((meal) => menuList.append(menuRow(meal)));
+    }
+    syncMenuSelect(menuFilterCuisine, options.cuisines, menuFilters.cuisine, '全部菜系');
+    syncMenuSelect(menuFilterFamily, options.families, menuFilters.family, '全部大类');
+    const hasWorldCuisine = options.zones.some((zone) => zone !== '中国菜');
+    menuZoneInputs.forEach((input) => {
+      const available = input.value === '世界料理' ? hasWorldCuisine : !input.value || options.zones.includes(input.value);
+      input.checked = input.value === menuFilters.zone;
+      input.disabled = !available && input.value !== menuFilters.zone;
+    });
+    if (menuFilterEnabled) menuFilterEnabled.checked = menuFilters.enabledOnly;
+    if (menuFilterQuery) menuFilterQuery.value = menuFilters.query;
+    if (menuFilterSummary) {
+      const path = [menuFilters.zone, menuFilters.cuisine, menuFilters.family].filter(Boolean).join(' · ');
+      menuFilterSummary.textContent = `显示 ${visibleMeals.length} / ${state.menu.length} 项${path ? ` · ${path}` : ''}`;
+    }
+    const count = $('#menu-count');
+    if (count) count.textContent = `${state.menu.filter((meal) => meal.enabled).length} 项启用 / ${state.menu.length} 项菜单`;
+  }
+  function syncMenuSelect(select, values, selected, placeholder) {
+    if (!select) return;
+    const choices = selected && !values.includes(selected) ? [...values, selected] : values;
+    select.replaceChildren();
+    const all = document.createElement('option'); all.value = ''; all.textContent = placeholder; select.append(all);
+    choices.forEach((value) => { const option = document.createElement('option'); option.value = value; option.textContent = value; select.append(option); });
+    select.value = selected;
   }
   function menuRow(meal) {
     const form = document.createElement('form'); form.className = 'menu-row'; form.noValidate = true; form.addEventListener('submit', (event) => event.preventDefault());
-    const heading = document.createElement('div'); heading.className = 'menu-row-heading'; const title = document.createElement('h3'); title.textContent = meal.name; const status = document.createElement('span'); status.textContent = meal.enabled ? '启用中' : '已停用'; heading.append(title, status); form.append(heading);
+    const heading = document.createElement('div'); heading.className = 'menu-row-heading'; const title = document.createElement('h3'); title.textContent = meal.name; const status = document.createElement('span'); status.textContent = `${meal.enabled ? '启用中' : '已停用'}${meal.source === '待确认' ? ' · 待确认模板' : ''}`; heading.append(title, status); form.append(heading);
+    const path = document.createElement('p'); path.className = 'meal-cuisine-path'; path.textContent = cuisinePath(meal); form.append(path);
     form.append(textControl(meal.id, '名称', 'name', meal.name), textControl(meal.id, '来源/档口', 'venue', meal.venue), selectControl(meal.id, '去处', 'source', MENU_OPTIONS.sources, meal.source), selectControl(meal.id, '主食', 'staple', MENU_OPTIONS.staples, meal.staple), selectControl(meal.id, '蛋白', 'protein', MENU_OPTIONS.proteins, meal.protein), selectControl(meal.id, '蔬菜', 'vegetable', MENU_OPTIONS.vegetables, meal.vegetable), selectControl(meal.id, '口味', 'flavor', MENU_OPTIONS.flavors, meal.flavor), periodControl(meal));
     const actions = document.createElement('div'); actions.className = 'menu-row-actions';
     const enabled = document.createElement('button'); enabled.type = 'button'; enabled.className = 'menu-small-button'; enabled.textContent = meal.enabled ? '停用此餐' : '启用此餐'; enabled.addEventListener('click', () => updateMeal(meal.id, { enabled: !meal.enabled }));

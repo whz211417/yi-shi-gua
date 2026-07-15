@@ -23,12 +23,14 @@ import {
   chooseMeal,
   contextualSeed,
   dailyBalanceTip,
+  initialMenuFilters,
   loadStoredState,
   newMeal,
   normaliseMenu,
   normaliseRecordsByDate,
   oracleFor,
   oracleForContext,
+  reduceMenuFilters,
   resolveWeather,
   saveStoredState,
   scoreMeal,
@@ -253,6 +255,26 @@ test('menu filter static contract keeps cuisine controls inside the menu panel',
   const css = readFileSync(new URL('../assets/style.css', import.meta.url), 'utf8');
   assert.match(css, /\.menu-filters/);
   assert.match(css, /@media \(max-width: 699px\)[\s\S]*\.menu-filters/);
+});
+
+test('menu filters use the catalog helpers and reduce dependent selections without mutation', () => {
+  const app = readFileSync(new URL('../assets/app.js', import.meta.url), 'utf8');
+  assert.match(app, /import \{ availableCuisineOptions, cuisinePath, filterMealsByCuisine, normaliseCuisineFields \} from '\.\/cuisine-catalog\.js';/);
+
+  const initial = initialMenuFilters();
+  assert.deepEqual(initial, { zone: '', cuisine: '', family: '', enabledOnly: false, query: '' });
+  assert.notEqual(initial, initialMenuFilters(), 'each caller receives independent filter state');
+
+  const selected = Object.freeze({ zone: ' 中国菜 ', cuisine: ' 川菜 ', family: ' 热菜 ', enabledOnly: true, query: ' 宫保 ' });
+  const afterCuisine = reduceMenuFilters(selected, { type: 'cuisine', value: ' 湘菜 ' });
+  assert.deepEqual(afterCuisine, { zone: '中国菜', cuisine: '湘菜', family: '', enabledOnly: true, query: '宫保' });
+  assert.deepEqual(selected, { zone: ' 中国菜 ', cuisine: ' 川菜 ', family: ' 热菜 ', enabledOnly: true, query: ' 宫保 ' });
+
+  const afterZone = reduceMenuFilters(afterCuisine, { type: 'zone', value: ' 世界料理 ' });
+  assert.deepEqual(afterZone, { zone: '世界料理', cuisine: '', family: '', enabledOnly: true, query: '宫保' });
+  assert.deepEqual(reduceMenuFilters(afterZone, { type: 'enabledOnly', value: false }), { ...afterZone, enabledOnly: false });
+  assert.deepEqual(reduceMenuFilters(afterZone, { type: 'query', value: ' Cafe\u0301 ' }), { ...afterZone, query: 'Café' });
+  assert.deepEqual(reduceMenuFilters(afterZone, { type: 'clear' }), initialMenuFilters());
 });
 
 test('food oracle map has 64 gentle entertainment-only entries', () => {
