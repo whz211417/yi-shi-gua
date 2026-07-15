@@ -316,6 +316,15 @@ test('northern and Yunnan cuisines provide broad, distinct dish taxonomy coverag
   }
 });
 
+test('northern and Yunnan catalog entries retain dish-level family assignments', () => {
+  const northwest = DEFAULT_CUISINE_TAXONOMY.中国菜.西北菜;
+  const yunnan = DEFAULT_CUISINE_TAXONOMY.中国菜.云南菜;
+  assert.ok(northwest.凉菜.includes('陕北凉粉'));
+  assert.ok(!Object.values(northwest).flat().includes('陕北拼盘'));
+  assert.ok(yunnan.热菜.includes('宜良烤鸭蘸水'));
+  assert.ok(!yunnan.汤锅.includes('宜良烤鸭蘸水'));
+});
+
 test('eight classical cuisines have no cross-cuisine duplicates or forbidden generic labels', () => {
   const classicalCuisines = ['川菜', '粤菜', '湘菜', '鲁菜', '苏菜', '浙菜', '闽菜', '徽菜'];
   const dishTypes = classicalCuisines.flatMap((cuisine) => Object.values(DEFAULT_CUISINE_TAXONOMY.中国菜[cuisine]).flat());
