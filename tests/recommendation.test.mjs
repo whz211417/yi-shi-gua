@@ -279,6 +279,26 @@ test('directory menu static contract provides scoped catalog browsing without de
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
 });
 
+test('compact menu rows open a focused on-demand editor instead of inline forms', () => {
+  const app = readFileSync(new URL('../assets/app.js', import.meta.url), 'utf8');
+
+  assert.match(app, /const mealEditorPanel = \$\('#meal-editor-panel'\);/);
+  assert.match(app, /mealDetailsTrigger\.addEventListener\('click', openMealEditor\);/);
+  assert.match(app, /function renderMealEditor\(meal\)/);
+  assert.match(app, /function closeMealEditor\(\)/);
+  assert.match(app, /function deleteMeal\(id\)/);
+  const editor = app.slice(app.indexOf('function renderMealEditor(meal)'), app.indexOf('function saveMealEditor(event)'));
+  for (const field of ['name', 'venue', 'source', 'meals', 'staple', 'protein', 'vegetable', 'flavor']) {
+    assert.match(editor, new RegExp(`'${field}'`), `editor must provide ${field}`);
+  }
+  assert.match(editor, /setAttribute\('data-editor-field', field\)/);
+  assert.match(app, /form\.addEventListener\('submit', saveMealEditor\);/);
+  assert.match(app, /saveMealEditor[\s\S]*updateMeal\(/);
+  assert.match(app, /deleteMeal[\s\S]*persist\(\)[\s\S]*renderMenu\(\)/);
+  const row = app.slice(app.indexOf('function menuRow(meal)'), app.indexOf('function syncSelectedMealTrigger()'));
+  assert.doesNotMatch(row, /createElement\('form'\)/);
+});
+
 test('menu filters use the catalog helpers and reduce dependent selections without mutation', () => {
   const app = readFileSync(new URL('../assets/app.js', import.meta.url), 'utf8');
   assert.match(app, /import \{ availableCuisineOptions, cuisinePath, filterMealsByCuisine, normaliseCuisineFields \} from '\.\/cuisine-catalog\.js';/);

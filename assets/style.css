@@ -887,5 +887,8 @@ h1 span { display: block; white-space: nowrap; }
 .cuisine-directory { border:1px solid var(--line, #4d483c); border-radius:.75rem; padding:.8rem; background:rgba(255,255,255,.02); }
 .menu-catalog-results { min-width:0; }
 .meal-editor-panel { border:1px solid var(--line, #4d483c); border-radius:.75rem; padding:1rem; margin-top:1rem; }
+.meal-editor-form { display:grid; gap:.75rem; }
+.meal-editor-form h3 { margin:0; font-family:"Songti SC", "STSong", serif; font-size:1.3rem; font-weight:500; }
+.meal-editor-form .menu-row-actions { padding-top:.25rem; }
 @media (max-width: 699px) { .menu-catalog-layout { grid-template-columns:1fr; } .menu-scope-tabs { overflow-x:auto; } }
 @media (prefers-reduced-motion: reduce) { .menu-scope-tabs *, .menu-catalog-layout * { transition:none !important; animation:none !important; } }

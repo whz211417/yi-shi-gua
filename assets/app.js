@@ -305,16 +305,17 @@ function initialiseCastingInterface() {
   const retryButton = $('#retry-button'); const confirmButton = $('#confirm-button'); const resultCard = $('#result-card');
   const resultEmpty = $('#result-empty'); const resultContent = $('#result-content'); const liveRegion = $('#live-region'); const dateStamp = $('#today-date'); const calendarStatus = $('#calendar-status'); const balanceTip = $('#daily-balance-tip');
   const menuOpenButton = $('#menu-open-button'); const menuCloseButton = $('#menu-close-button'); const menuPanel = $('#menu-panel'); const menuList = $('#menu-list');
-  const menuScopeTabs = [...document.querySelectorAll('#menu-scope-tabs [data-menu-scope]')]; const cuisineDirectory = $('#cuisine-directory'); const cuisineDirectorySummary = $('#cuisine-directory-summary'); const mealDetailsTrigger = $('#meal-details-trigger');
+  const menuScopeTabs = [...document.querySelectorAll('#menu-scope-tabs [data-menu-scope]')]; const cuisineDirectory = $('#cuisine-directory'); const cuisineDirectorySummary = $('#cuisine-directory-summary'); const mealDetailsTrigger = $('#meal-details-trigger'); const mealEditorPanel = $('#meal-editor-panel');
   const addMealButton = $('#add-meal-button'); const resetMenuButton = $('#reset-menu-button');
   const menuFilterZone = $('#menu-filter-zone'); const menuFilterCuisine = $('#menu-filter-cuisine'); const menuFilterFamily = $('#menu-filter-family');
   const menuFilterEnabled = $('#menu-filter-enabled'); const menuFilterQuery = $('#menu-filter-query'); const menuFilterClear = $('#menu-filter-clear'); const menuFilterSummary = $('#menu-filter-summary');
   const menuZoneInputs = menuFilterZone ? [...menuFilterZone.querySelectorAll('input[name="menu-zone"]')] : [];
-  if (![numberInput, randomButton, castButton, retryButton, confirmButton, resultCard, resultEmpty, resultContent, liveRegion, dateStamp, calendarStatus, balanceTip, menuOpenButton, menuCloseButton, menuPanel, menuList, addMealButton, resetMenuButton].every(Boolean)) return;
+  if (![numberInput, randomButton, castButton, retryButton, confirmButton, resultCard, resultEmpty, resultContent, liveRegion, dateStamp, calendarStatus, balanceTip, menuOpenButton, menuCloseButton, menuPanel, menuList, mealDetailsTrigger, mealEditorPanel, addMealButton, resetMenuButton].every(Boolean)) return;
   const today = new Date(); const date = todayKey(today); const saved = loadStoredState(safeStorage());
   const state = { menu: saved.menu, recordsByDate: saved.recordsByDate, rejectedIds: [], selected: null };
   // The catalog opens in the Chinese-cuisine scope; world entries are never mixed into this first directory view.
   let menuFilters = { ...initialMenuFilters(), zone: '中国菜' };
+  let selectedMenuMealId = null;
   dateStamp.textContent = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' }).format(today);
   try {
     const calendar = beijingCalendarParts(today);
@@ -344,7 +345,8 @@ function initialiseCastingInterface() {
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   });
   addMealButton.addEventListener('click', () => { state.menu.push(newMeal()); persist(); renderMenu(); menuList.querySelector('.menu-row')?.focus(); });
-  resetMenuButton.addEventListener('click', () => { if (window.confirm('确定要恢复起始菜单吗？这会覆盖当前本地菜单。')) { state.menu = normaliseMenu(null); persist(); renderMenu(); announce('菜单已恢复为起始项。'); } });
+  resetMenuButton.addEventListener('click', () => { if (window.confirm('确定要恢复起始菜单吗？这会覆盖当前本地菜单。')) { state.menu = normaliseMenu(null); clearMenuMealSelection(); persist(); renderMenu(); announce('菜单已恢复为起始项。'); } });
+  mealDetailsTrigger.addEventListener('click', openMealEditor);
   menuScopeTabs.forEach((tab) => tab.addEventListener('click', () => { menuFilters = filtersForMenuScope(tab.dataset.menuScope); renderMenu(); }));
   menuZoneInputs.forEach((input) => input.addEventListener('change', () => { if (input.checked) updateMenuFilters({ type: 'zone', value: input.value }); }));
   menuFilterCuisine?.addEventListener('change', () => updateMenuFilters({ type: 'cuisine', value: menuFilterCuisine.value }));
@@ -532,6 +534,7 @@ function initialiseCastingInterface() {
     }
     const count = $('#menu-count');
     if (count) count.textContent = `${state.menu.filter((meal) => meal.enabled).length} 项启用 / ${state.menu.length} 项菜单`;
+    syncSelectedMealTrigger();
   }
   function renderCuisineDirectory(cuisines, scopedMenu, catalogFilters) {
     if (!cuisineDirectory) return;
@@ -560,11 +563,115 @@ function initialiseCastingInterface() {
     const heading = document.createElement('div'); heading.className = 'menu-row-heading'; const title = document.createElement('h3'); title.textContent = meal.name; const status = document.createElement('span'); status.textContent = meal.enabled ? '启用中' : '已停用'; heading.append(title, status); row.append(heading);
     const path = document.createElement('p'); path.className = 'meal-cuisine-path'; path.textContent = cuisinePath(meal).split(' / ').slice(1).join(' / '); row.append(path);
     const enabled = document.createElement('button'); enabled.type = 'button'; enabled.className = 'menu-small-button'; enabled.textContent = meal.enabled ? '停用此餐' : '启用此餐'; enabled.addEventListener('click', (event) => { event.stopPropagation(); updateMeal(meal.id, { enabled: !meal.enabled }); }); row.append(enabled);
-    const select = () => { if (mealDetailsTrigger) { mealDetailsTrigger.hidden = false; mealDetailsTrigger.dataset.mealId = meal.id; } announce(`已选择${meal.name}；可继续编辑所选餐品。`); };
+    const select = () => selectMenuMeal(meal.id);
     row.addEventListener('click', select);
     row.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(); } });
     return row;
   }
-  function updateMeal(id, changes) { const index = state.menu.findIndex((meal) => meal.id === id); if (index < 0) return; const candidate = { ...state.menu[index], ...changes }; if (!isValidMenu(state.menu.map((meal, itemIndex) => itemIndex === index ? candidate : meal))) { announce('请保留有效名称、档口和至少一个餐别。'); renderMenu(); return; } state.menu[index] = candidate; persist(); renderMenu(); }
+  function syncSelectedMealTrigger() {
+    const selected = state.menu.find((meal) => meal.id === selectedMenuMealId);
+    mealDetailsTrigger.hidden = !selected;
+    if (selected) mealDetailsTrigger.dataset.mealId = selected.id;
+    else delete mealDetailsTrigger.dataset.mealId;
+  }
+  function clearMenuMealSelection() {
+    selectedMenuMealId = null;
+    mealDetailsTrigger.hidden = true;
+    delete mealDetailsTrigger.dataset.mealId;
+    mealEditorPanel.replaceChildren();
+    mealEditorPanel.hidden = true;
+  }
+  function selectMenuMeal(id) {
+    const meal = state.menu.find((item) => item.id === id);
+    if (!meal) return;
+    selectedMenuMealId = meal.id;
+    mealEditorPanel.replaceChildren();
+    mealEditorPanel.hidden = true;
+    syncSelectedMealTrigger();
+    announce(`已选择${meal.name}；可继续编辑所选餐品。`);
+  }
+  function openMealEditor() {
+    const meal = state.menu.find((item) => item.id === selectedMenuMealId);
+    if (!meal) return;
+    renderMealEditor(meal);
+    mealEditorPanel.querySelector('[data-editor-field="name"]')?.focus();
+  }
+  function renderMealEditor(meal) {
+    const form = document.createElement('form'); form.className = 'meal-editor-form'; form.dataset.mealId = meal.id;
+    const title = document.createElement('h3'); title.textContent = `编辑：${meal.name}`; form.append(title);
+    const control = (field, labelText, input) => {
+      const label = document.createElement('label'); label.className = 'menu-control'; label.htmlFor = `meal-editor-${field}`;
+      const text = document.createElement('span'); text.textContent = labelText;
+      input.id = `meal-editor-${field}`; input.name = field; input.setAttribute('data-editor-field', field);
+      label.append(text, input); return label;
+    };
+    const textInput = (field, labelText, value) => {
+      const input = document.createElement('input'); input.type = 'text'; input.value = value; input.required = true;
+      form.append(control(field, labelText, input));
+    };
+    const selectInput = (field, labelText, value, choices) => {
+      const select = document.createElement('select');
+      choices.forEach((choice) => { const option = document.createElement('option'); option.value = choice; option.textContent = choice; option.selected = choice === value; select.append(option); });
+      form.append(control(field, labelText, select));
+    };
+    textInput('name', '餐名', meal.name);
+    textInput('venue', '档口 / 地点', meal.venue);
+    selectInput('source', '来源', meal.source, MENU_OPTIONS.sources);
+    const periods = document.createElement('fieldset'); periods.className = 'menu-periods'; periods.setAttribute('data-editor-field', 'meals');
+    const legend = document.createElement('legend'); legend.textContent = '适用餐别'; periods.append(legend);
+    ['早餐', '午餐', '晚餐'].forEach((period) => {
+      const label = document.createElement('label'); const input = document.createElement('input'); input.type = 'checkbox'; input.name = 'meals'; input.value = period; input.checked = meal.meals.includes(period);
+      label.append(input, document.createTextNode(period)); periods.append(label);
+    });
+    form.append(periods);
+    selectInput('staple', '主食', meal.staple, MENU_OPTIONS.staples);
+    selectInput('protein', '蛋白', meal.protein, MENU_OPTIONS.proteins);
+    selectInput('vegetable', '蔬菜', meal.vegetable, MENU_OPTIONS.vegetables);
+    selectInput('flavor', '口味', meal.flavor, MENU_OPTIONS.flavors);
+    const actions = document.createElement('div'); actions.className = 'menu-row-actions';
+    const save = document.createElement('button'); save.type = 'submit'; save.className = 'confirm-button'; save.textContent = '保存修改';
+    const close = document.createElement('button'); close.type = 'button'; close.className = 'retry-button'; close.textContent = '取消'; close.addEventListener('click', closeMealEditor);
+    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'menu-delete-button'; remove.textContent = '删除此餐'; remove.addEventListener('click', () => deleteMeal(meal.id));
+    actions.append(save, close, remove); form.append(actions);
+    form.addEventListener('submit', saveMealEditor);
+    mealEditorPanel.replaceChildren(form);
+    mealEditorPanel.hidden = false;
+  }
+  function saveMealEditor(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const changes = {
+      name: form.elements.name.value.trim(),
+      venue: form.elements.venue.value.trim(),
+      source: form.elements.source.value,
+      meals: [...form.querySelectorAll('input[name="meals"]:checked')].map((input) => input.value),
+      staple: form.elements.staple.value,
+      protein: form.elements.protein.value,
+      vegetable: form.elements.vegetable.value,
+      flavor: form.elements.flavor.value,
+    };
+    if (updateMeal(form.dataset.mealId, changes)) {
+      closeMealEditor();
+      announce(`已保存${changes.name}。`);
+    }
+  }
+  function closeMealEditor() {
+    mealEditorPanel.replaceChildren();
+    mealEditorPanel.hidden = true;
+    persist();
+    renderMenu();
+    mealDetailsTrigger.focus();
+  }
+  function deleteMeal(id) {
+    if (state.menu.length <= 1) { announce('菜单至少需要保留一项餐品。'); return; }
+    const meal = state.menu.find((item) => item.id === id);
+    if (!meal || !window.confirm(`确定删除“${meal.name}”吗？`)) return;
+    state.menu = state.menu.filter((item) => item.id !== id);
+    clearMenuMealSelection();
+    persist();
+    renderMenu();
+    announce(`已删除${meal.name}。`);
+  }
+  function updateMeal(id, changes) { const index = state.menu.findIndex((meal) => meal.id === id); if (index < 0) return false; const candidate = { ...state.menu[index], ...changes }; if (!isValidMenu(state.menu.map((meal, itemIndex) => itemIndex === index ? candidate : meal))) { announce('请保留有效名称、档口和至少一个餐别。'); renderMenu(); return false; } state.menu[index] = candidate; persist(); renderMenu(); return true; }
   function announce(message) { liveRegion.textContent = ''; window.setTimeout(() => { liveRegion.textContent = message; }, 20); }
 }
