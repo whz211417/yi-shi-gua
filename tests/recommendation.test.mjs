@@ -305,6 +305,17 @@ test('eight classical Chinese cuisines provide broad, distinct dish taxonomy cov
   }
 });
 
+test('northern and Yunnan cuisines provide broad, distinct dish taxonomy coverage', () => {
+  const cuisines = ['京津菜', '东北菜', '西北菜', '云南菜'];
+  for (const cuisine of cuisines) {
+    const families = DEFAULT_CUISINE_TAXONOMY.中国菜[cuisine];
+    const dishes = Object.values(families).flat();
+    assert.ok(Object.keys(families).length >= 4, `${cuisine} must provide at least four course families`);
+    assert.ok(dishes.length >= 20, `${cuisine} must provide at least 20 dish types`);
+    assert.equal(new Set(dishes).size, dishes.length, `${cuisine} dish types must be distinct`);
+  }
+});
+
 test('eight classical cuisines have no cross-cuisine duplicates or forbidden generic labels', () => {
   const classicalCuisines = ['川菜', '粤菜', '湘菜', '鲁菜', '苏菜', '浙菜', '闽菜', '徽菜'];
   const dishTypes = classicalCuisines.flatMap((cuisine) => Object.values(DEFAULT_CUISINE_TAXONOMY.中国菜[cuisine]).flat());
