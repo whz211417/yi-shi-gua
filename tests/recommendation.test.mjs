@@ -333,6 +333,38 @@ test('southern Chinese regional cuisines provide broad, distinct dish taxonomy c
   }
 });
 
+test('the final four Chinese cuisine catalogues provide specific, appropriate broad coverage', () => {
+  const cuisines = ['素食', '清真风味', '地方小吃', '中式日常'];
+  const chineseCuisines = DEFAULT_CUISINE_TAXONOMY.中国菜;
+  assert.deepEqual(
+    Object.keys(chineseCuisines).filter((cuisine) => cuisines.includes(cuisine)),
+    cuisines,
+    'coverage applies to exactly the final four named Chinese cuisines',
+  );
+
+  for (const cuisine of cuisines) {
+    const families = chineseCuisines[cuisine];
+    const dishTypes = Object.values(families).flat();
+    assert.ok(Object.keys(families).length >= 4, `${cuisine} must provide at least four meaningful course families`);
+    assert.ok(dishTypes.length >= 20, `${cuisine} must provide at least 20 dish types`);
+    assert.equal(new Set(dishTypes).size, dishTypes.length, `${cuisine} dish types must be distinct`);
+  }
+
+  assert.ok(chineseCuisines.素食.热菜.includes('宫保杏鲍菇'));
+  assert.ok(chineseCuisines.素食.面点主食.includes('素菜包'));
+  assert.ok(chineseCuisines.清真风味.热菜.includes('它似蜜'));
+  assert.ok(chineseCuisines.清真风味.面食.includes('兰州牛肉面'));
+  assert.ok(chineseCuisines.地方小吃.粉面.includes('柳州螺蛳粉'));
+  assert.ok(chineseCuisines.地方小吃.街头小吃.includes('天津煎饼果子'));
+  assert.ok(chineseCuisines.中式日常.家常热菜.includes('青椒土豆丝'));
+  assert.ok(chineseCuisines.中式日常.早餐点心.includes('豆浆油条'));
+
+  const vegetarianDishes = Object.values(chineseCuisines.素食).flat().join(' / ');
+  assert.doesNotMatch(vegetarianDishes, /鸡|鸭|鱼|虾|肉|牛|羊|猪|蛋|火腿/);
+  const halalDishes = Object.values(chineseCuisines.清真风味).flat().join(' / ');
+  assert.doesNotMatch(halalDishes, /猪|酒|料酒/);
+});
+
 test('northern and Yunnan catalog entries retain dish-level family assignments', () => {
   const northwest = DEFAULT_CUISINE_TAXONOMY.中国菜.西北菜;
   const yunnan = DEFAULT_CUISINE_TAXONOMY.中国菜.云南菜;
