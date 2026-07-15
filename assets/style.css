@@ -489,6 +489,21 @@ h1 span { display: block; white-space: nowrap; }
 .menu-count, .menu-panel-note { color: var(--paper-muted); font-size: 13px; line-height: 1.7; }
 .menu-count { margin: 8px 0 0; }
 .menu-panel-note { max-width: 56ch; margin: 18px 0; }
+.menu-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0 0 18px; padding: 14px; border: 1px solid var(--line); background: rgb(255 255 255 / .018); }
+.menu-filter-zone { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 7px; margin: 0; padding: 0; border: 0; }
+.menu-filter-zone legend { width: 100%; margin-bottom: 2px; color: var(--paper-muted); font-size: 12px; }
+.menu-filter-zone label { position: relative; display: inline-flex; min-height: 44px; align-items: center; }
+.menu-filter-zone input { position: absolute; opacity: 0; pointer-events: none; }
+.menu-filter-zone span, .menu-filter-clear { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--paper-muted); background: rgb(255 255 255 / .02); font-size: 12px; }
+.menu-filter-zone input:checked + span { border-color: rgb(174 139 76 / .75); color: var(--bronze-light); background: rgb(174 139 76 / .12); }
+.menu-filter-zone input:focus-visible + span, .menu-filter-clear:focus-visible { outline: 2px solid var(--bronze-light); outline-offset: 2px; }
+.menu-filter-control { display: grid; gap: 5px; color: var(--paper-muted); font-size: 12px; }
+.menu-filter-control select, .menu-filter-control input { width: 100%; min-height: 44px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--paper-light); background: var(--ink); }
+.menu-filter-enabled { display: inline-flex; min-height: 44px; align-items: end; gap: 7px; color: var(--paper-muted); font-size: 13px; }
+.menu-filter-search { grid-column: 1 / -1; }
+.menu-filter-clear { align-self: end; justify-self: start; padding: 0 11px; cursor: pointer; }
+.menu-filter-summary { grid-column: 1 / -1; margin: 0; color: var(--ash); font-size: 12px; line-height: 1.6; }
+.meal-cuisine-path { margin: -5px 0 1px; color: var(--bronze-light); font-size: 11px; letter-spacing: .025em; line-height: 1.55; }
 .menu-list { display: grid; gap: 14px; }
 .menu-row { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--line); background: rgb(255 255 255 / .025); }
 .menu-row-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
@@ -512,6 +527,7 @@ h1 span { display: block; white-space: nowrap; }
 .menu-small-button, .menu-delete-button { padding: 0 11px; }
 .menu-delete-button { border-color: rgb(207 82 69 / .65); color: #f0aaa3; }
 .menu-panel-actions { position: sticky; bottom: 0; padding-top: 18px; background: var(--ink-raised); }
+
 .menu-panel-actions .confirm-button, .menu-panel-actions .retry-button { padding: 0 14px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
@@ -556,6 +572,8 @@ h1 span { display: block; white-space: nowrap; }
   .ink-ring { width: min(82%, 26rem); height: clamp(8.5rem, 46vw, 12.5rem); }
   .menu-panel { padding: 10px; }
   .menu-panel-inner { padding: 18px; }
+  .menu-filters { grid-template-columns: minmax(0, 1fr); padding: 12px; }
+  .menu-filter-search, .menu-filter-summary { grid-column: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {

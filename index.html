@@ -167,7 +167,21 @@
           </div>
           <button id="menu-close-button" class="menu-close-button" type="button" aria-label="关闭菜单管理">关闭</button>
         </header>
-        <p class="menu-panel-note">所有内容仅保存在这台设备的浏览器中。标签使用固定选项，保证推荐规则可持续生效。</p>
+        <p class="menu-panel-note">所有内容仅保存在这台设备的浏览器中。起始模板均待你确认实际供应地点；启用后才会参与餐签。</p>
+        <form id="menu-filters" class="menu-filters" aria-label="食单筛选" onsubmit="return false;">
+          <fieldset id="menu-filter-zone" class="menu-filter-zone">
+            <legend>范围</legend>
+            <label><input type="radio" name="menu-zone" value="" checked><span>全部</span></label>
+            <label><input type="radio" name="menu-zone" value="中国菜"><span>中餐</span></label>
+            <label><input type="radio" name="menu-zone" value="世界料理"><span>世界料理</span></label>
+          </fieldset>
+          <label class="menu-filter-control" for="menu-filter-cuisine"><span>菜系</span><select id="menu-filter-cuisine"><option value="">全部菜系</option></select></label>
+          <label class="menu-filter-control" for="menu-filter-family"><span>大类</span><select id="menu-filter-family"><option value="">全部大类</option></select></label>
+          <label class="menu-filter-enabled" for="menu-filter-enabled"><input id="menu-filter-enabled" type="checkbox"><span>只看已启用</span></label>
+          <label class="menu-filter-control menu-filter-search" for="menu-filter-query"><span>搜索</span><input id="menu-filter-query" type="search" placeholder="搜菜名或小类"></label>
+          <button id="menu-filter-clear" class="menu-filter-clear" type="button">清除筛选</button>
+          <p id="menu-filter-summary" class="menu-filter-summary" aria-live="polite"></p>
+        </form>
         <div id="menu-list" class="menu-list" aria-live="polite"></div>
         <div class="menu-panel-actions">
           <button id="add-meal-button" class="confirm-button" type="button">新增餐品</button>
