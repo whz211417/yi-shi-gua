@@ -385,6 +385,17 @@ test('East and Southeast Asian cuisines provide broad, distinct dish taxonomy co
   }
 });
 
+test('South Asian, European and American cuisines provide broad, distinct dish taxonomy coverage', () => {
+  const cuisines = ['印度菜', '意餐', '法餐', '西式简餐', '墨西哥菜', '美式餐'];
+  for (const cuisine of cuisines) {
+    const families = Object.values(DEFAULT_CUISINE_TAXONOMY).flatMap((zone) => Object.entries(zone)).find(([name]) => name === cuisine)?.[1];
+    const dishes = Object.values(families).flat();
+    assert.ok(Object.keys(families).length >= 4, `${cuisine} must provide at least four course families`);
+    assert.ok(dishes.length >= 20, `${cuisine} must provide at least 20 dish types`);
+    assert.equal(new Set(dishes).size, dishes.length, `${cuisine} dish types must be distinct`);
+  }
+});
+
 test('eight classical cuisines have no cross-cuisine duplicates or forbidden generic labels', () => {
   const classicalCuisines = ['川菜', '粤菜', '湘菜', '鲁菜', '苏菜', '浙菜', '闽菜', '徽菜'];
   const dishTypes = classicalCuisines.flatMap((cuisine) => Object.values(DEFAULT_CUISINE_TAXONOMY.中国菜[cuisine]).flat());
