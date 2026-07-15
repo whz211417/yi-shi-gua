@@ -7,7 +7,7 @@ const STORAGE_VERSION = 1;
 const REQUIRED_MEAL_FIELDS = ['id', 'name', 'source', 'venue', 'meals', 'staple', 'protein', 'vegetable', 'flavor', 'enabled'];
 const RECENT_HISTORY_WINDOW = 5;
 const MEAL_PERIODS = new Set(['早餐', '午餐', '晚餐']);
-const VALID_SOURCES = new Set(['食堂', '校外']);
+const VALID_SOURCES = new Set(['食堂', '校外', '待确认']);
 export const MENU_OPTIONS = {
   sources: [...VALID_SOURCES],
   staples: [...new Set(STARTER_MEALS.map((meal) => meal.staple))],
@@ -207,7 +207,7 @@ function recentWithinCalendarDays(records, dateKey, calendarDays) {
   const firstDay = todayKey(start);
   return records.filter((record) => isDateKey(record.date) && record.date >= firstDay && record.date <= dateKey);
 }
-function matchesPlace(meal, place) { if (!place || place === '不限') return true; if (place === '在学校' || place === '不想走远') return meal.source === '食堂'; return place !== '校外' || meal.source === '校外'; }
+function matchesPlace(meal, place) { if (!place || place === '不限' || meal.source === '待确认') return true; if (place === '在学校' || place === '不想走远') return meal.source === '食堂'; return place !== '校外' || meal.source === '校外'; }
 function repeatsCore(record, meal) { return isRecord(record) && (sameMeal(record, meal) || record.staple === meal.staple || record.protein === meal.protein); }
 function sameMeal(record, meal) { return isRecord(record) && isRecord(meal) && (record.mealId === meal.id || record.id === meal.id || record.name === meal.name); }
 function isHeavy(flavor) { return flavor === '油炸' || flavor === '重口'; }

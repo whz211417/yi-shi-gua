@@ -136,18 +136,17 @@ test('Beijing calendar parts use Asia Shanghai rather than the device local time
   assert.ok(parts.lunarDay >= 1 && parts.lunarDay <= 30);
 });
 
-test('starter menu offers 70+ varied editable choices across key meal situations', () => {
-  assert.ok(STARTER_MEALS.length >= 70, 'starter menu should contain at least 70 choices');
+test('starter menu re-exports the layered templates across key meal situations', () => {
+  assert.equal(STARTER_MEALS, MEAL_TEMPLATES, 'starter menu must use the catalog rather than duplicate it');
+  assert.equal(STARTER_MEALS.length, MEAL_TEMPLATES.length);
   for (const period of ['早餐', '午餐', '晚餐']) {
     assert.ok(STARTER_MEALS.some((meal) => meal.meals.includes(period)), `missing ${period}`);
   }
-  for (const source of ['食堂', '校外']) {
-    assert.ok(STARTER_MEALS.some((meal) => meal.source === source), `missing ${source}`);
-  }
-  assert.ok(STARTER_MEALS.some((meal) => meal.source === '校外' && meal.meals.includes('早餐')), 'missing off-campus breakfast');
+  assert.ok(STARTER_MEALS.every((meal) => meal.source === '待确认'), 'default templates must not claim local availability');
+  assert.ok(STARTER_MEALS.some((meal) => meal.meals.includes('早餐')), 'missing breakfast template');
   assert.ok(STARTER_MEALS.some((meal) => meal.protein === '鱼虾' && meal.meals.includes('午餐')), 'missing fish/shrimp lunch');
   assert.ok(STARTER_MEALS.some((meal) => meal.protein === '鱼虾' && meal.meals.includes('晚餐')), 'missing fish/shrimp dinner');
-  assert.ok(STARTER_MEALS.some((meal) => meal.staple === '粥类' && meal.meals.includes('晚餐')), 'missing porridge dinner');
+  assert.ok(STARTER_MEALS.some((meal) => meal.staple === '粥类'), 'missing porridge template');
   assert.equal(new Set(STARTER_MEALS.map((meal) => meal.id)).size, STARTER_MEALS.length, 'starter meal ids must be unique');
   assert.equal(new Set(STARTER_MEALS.map((meal) => meal.name)).size, STARTER_MEALS.length, 'starter meal names must be unique');
   const validSources = new Set(['食堂', '校外', '待确认']);
@@ -368,6 +367,27 @@ test('chooseMeal excludes wrong period, place, disabled, and rejected meals', ()
   assert.equal(result.relaxed, false);
 });
 
+test('pending templates are usable for either location choice', () => {
+  const pending = meal('pending', { source: '待确认', venue: '待确认模板' });
+  for (const place of ['在学校', '不想走远', '校外']) {
+    assert.equal(chooseMeal({ meals: [pending], mealPeriod: '午餐', place, seed: 5 }).meal.id, 'pending', `${place} should include pending candidates`);
+  }
+});
+
+test('default recommendations exclude disabled world templates, while manually enabled pending world templates are eligible', () => {
+  const defaultResult = chooseMeal({ mealPeriod: '午餐', place: '在学校', seed: 5 });
+  assert.ok(defaultResult.meal, 'Chinese defaults should produce an eligible result');
+  assert.equal(defaultResult.meal.cuisineZone, '中国菜');
+  assert.ok(MEAL_TEMPLATES.filter((meal) => meal.cuisineZone !== '中国菜').every((meal) => meal.enabled === false));
+
+  const world = MEAL_TEMPLATES.find((meal) => meal.cuisineZone !== '中国菜' && meal.meals.includes('午餐'));
+  assert.ok(world, 'catalog needs a world lunch template');
+  const enabledWorld = { ...world, meals: [...world.meals], enabled: true };
+  for (const place of ['在学校', '不想走远', '校外']) {
+    assert.equal(chooseMeal({ meals: [enabledWorld], mealPeriod: '午餐', place, seed: 5 }).meal.id, enabledWorld.id, `${place} should include manually enabled pending templates`);
+  }
+});
+
 test('chooseMeal strongly avoids an immediately repeated meal, staple, and protein when alternatives exist', () => {
   const meals = [
     meal('rice-chicken', { staple: '米饭', protein: '鸡肉' }),
@@ -512,15 +532,24 @@ test('normaliseMenu restores clean defaults for malformed persisted menus', () =
   assert.deepEqual(normaliseMenu([meal('duplicate'), meal('duplicate', { name: 'duplicate two' })]), STARTER_MEALS);
 });
 
+test('normaliseMenu returns all layered defaults with their enabled Chinese/world split', () => {
+  const defaults = normaliseMenu(null);
+  assert.equal(defaults.length, MEAL_TEMPLATES.length);
+  assert.deepEqual(defaults, MEAL_TEMPLATES);
+  assert.equal(defaults.filter(({ cuisineZone, enabled }) => cuisineZone === '中国菜' && enabled).length, MEAL_TEMPLATES.filter(({ cuisineZone }) => cuisineZone === '中国菜').length);
+  assert.equal(defaults.filter(({ cuisineZone, enabled }) => cuisineZone !== '中国菜' && enabled).length, 0);
+});
+
 test('normaliseMenu clones fallback and accepted records to protect canonical data and callers', () => {
   const restored = normaliseMenu(null);
   assert.notEqual(restored, STARTER_MEALS);
   assert.notEqual(restored[0], STARTER_MEALS[0]);
   assert.notEqual(restored[0].meals, STARTER_MEALS[0].meals);
   restored[0].name = 'mutated fallback';
-  restored[0].meals.push('午餐');
+  const addedPeriod = restored[0].meals.includes('早餐') ? '午餐' : '早餐';
+  restored[0].meals.push(addedPeriod);
   assert.notEqual(STARTER_MEALS[0].name, 'mutated fallback');
-  assert.equal(STARTER_MEALS[0].meals.includes('午餐'), false);
+  assert.equal(STARTER_MEALS[0].meals.includes(addedPeriod), false);
 
   const custom = meal('custom', { name: '自定义轻食' });
   const normalised = normaliseMenu([custom]);
@@ -546,10 +575,10 @@ test('chooseMeal reports no eligible result and resolves identical scores determ
   assert.equal(chooseMeal({ ...baseContext, seed: 0 }).meal.id, chooseMeal({ ...baseContext, seed: 0 }).meal.id);
 });
 
-test('麻辣烫名称明确粉类主食以匹配重复规避元数据', () => {
-  const malatang = STARTER_MEALS.find((meal) => meal.id === 'cf-malatang');
-  assert.equal(malatang.staple, '粉类');
-  assert.match(malatang.name, /粉类/);
+test('layered template staples remain usable by repeat avoidance metadata', () => {
+  const template = STARTER_MEALS.find((meal) => meal.staple === '粉类' && meal.meals.includes('午餐'));
+  assert.ok(template, 'catalog must include a lunch noodle or rice-noodle template');
+  assert.equal(template.staple, '粉类');
 });
 
 test('todayKey formats a local date as an ISO-like day key', () => {
@@ -568,6 +597,24 @@ test('persistence restores a valid editable menu and newest-first confirmed reco
   assert.equal(saveStoredState(storage, state), true);
   assert.deepEqual(loadStoredState(storage), state);
   assert.deepEqual(normaliseRecordsByDate(state.recordsByDate).history.map((item) => item.id), ['latest', 'earlier']);
+});
+
+test('menu normalisation and local storage round-trip preserve optional template taxonomy fields', () => {
+  const storage = memoryStorage();
+  const template = MEAL_TEMPLATES.find((meal) => meal.cuisineZone !== '中国菜');
+  assert.ok(template, 'catalog needs a world template');
+  const input = { ...template, meals: [...template.meals] };
+  const normalised = normaliseMenu([input]);
+  const optionalFields = ['cuisineZone', 'cuisine', 'courseFamily', 'dishType', 'availability', 'isSupplement'];
+  for (const field of optionalFields) assert.equal(normalised[0][field], input[field], `${field} must survive normalisation`);
+  assert.notEqual(normalised[0], input);
+  assert.notEqual(normalised[0].meals, input.meals);
+
+  assert.equal(saveStoredState(storage, { menu: normalised, recordsByDate: {} }), true);
+  const restored = loadStoredState(storage).menu[0];
+  for (const field of optionalFields) assert.equal(restored[field], input[field], `${field} must survive local storage`);
+  assert.notEqual(restored, normalised[0]);
+  assert.notEqual(restored.meals, normalised[0].meals);
 });
 
 test('persistence safely falls back for broken JSON, bad schema, bad records, and unavailable storage', () => {
