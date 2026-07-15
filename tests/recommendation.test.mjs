@@ -316,6 +316,23 @@ test('northern and Yunnan cuisines provide broad, distinct dish taxonomy coverag
   }
 });
 
+test('southern Chinese regional cuisines provide broad, distinct dish taxonomy coverage', () => {
+  const cuisines = ['贵州菜', '潮汕菜', '客家菜', '港式', '台式'];
+  const chineseCuisines = DEFAULT_CUISINE_TAXONOMY.中国菜;
+  assert.deepEqual(
+    Object.keys(chineseCuisines).filter((cuisine) => cuisines.includes(cuisine)),
+    cuisines,
+    'coverage applies to exactly the five named southern regional cuisines',
+  );
+  for (const cuisine of cuisines) {
+    const families = chineseCuisines[cuisine];
+    const dishTypes = Object.values(families).flat();
+    assert.ok(Object.keys(families).length >= 4, `${cuisine} must provide at least four meaningful course families`);
+    assert.ok(dishTypes.length >= 20, `${cuisine} must provide at least 20 dish types`);
+    assert.equal(new Set(dishTypes).size, dishTypes.length, `${cuisine} dish types must be distinct`);
+  }
+});
+
 test('northern and Yunnan catalog entries retain dish-level family assignments', () => {
   const northwest = DEFAULT_CUISINE_TAXONOMY.中国菜.西北菜;
   const yunnan = DEFAULT_CUISINE_TAXONOMY.中国菜.云南菜;
