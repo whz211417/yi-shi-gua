@@ -245,19 +245,37 @@ test('layered meal template catalog supplies valid Chinese and world cuisine cov
   assert.ok(chineseTemplates.some((template) => template.cuisine === '素食' && template.flavor === '清淡'), 'missing light vegetarian template');
 });
 
-test('menu filter static contract keeps cuisine controls inside the menu panel', () => {
+test('directory menu static contract provides scoped catalog browsing without default edit forms', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const panel = html.slice(html.indexOf('<aside id="menu-panel"'));
-  for (const id of ['menu-filter-zone', 'menu-filter-cuisine', 'menu-filter-family', 'menu-filter-enabled', 'menu-filter-query', 'menu-filter-clear', 'menu-filter-summary']) {
+  const panelStart = html.indexOf('<aside id="menu-panel"');
+  const panel = html.slice(panelStart);
+  const home = html.slice(0, panelStart);
+
+  for (const id of ['menu-filter-zone', 'menu-filter-cuisine', 'menu-filter-family', 'menu-filter-enabled', 'menu-filter-query', 'menu-filter-clear', 'menu-filter-summary', 'menu-list']) {
     assert.equal((html.match(new RegExp(`id="${id}"`, 'g')) || []).length, 1, `${id} must be unique`);
     assert.ok(panel.includes(`id="${id}"`), `${id} must stay in the menu panel`);
   }
-  assert.match(panel, /value="中国菜"><span>中国菜<\/span>/);
-  assert.doesNotMatch(html.slice(0, html.indexOf('<aside id="menu-panel"')), /cuisine-preference|cast-cuisine|home-cuisine-filter/);
+
+  assert.match(panel, /<nav id="menu-scope-tabs"[^>]*aria-label="食单范围"/);
+  for (const scope of ['中国菜', '世界料理', '我的启用']) {
+    assert.match(panel, new RegExp(`<button[^>]*data-menu-scope="${scope}"[^>]*>${scope}<\\/button>`), `missing ${scope} scope tab`);
+  }
+  assert.match(panel, /<aside id="cuisine-directory"[^>]*aria-label="菜系目录"/);
+  assert.match(panel, /id="cuisine-directory-summary"/);
+  assert.match(panel, /class="menu-catalog-layout"/);
+  assert.match(panel, /class="menu-catalog-results"/);
+  assert.match(panel, /<aside id="meal-editor-panel"[^>]*hidden[^>]*aria-label="编辑餐品"/);
+  assert.match(panel, /<button id="meal-details-trigger"[^>]*hidden/);
+  assert.doesNotMatch(panel, /<form[^>]*class="menu-row"/);
   assert.doesNotMatch(panel, /menu-filter-dish-type/);
+  assert.doesNotMatch(home, /cuisine-preference|cast-cuisine|home-cuisine-filter|menu-scope-tabs|cuisine-directory/);
+
   const css = readFileSync(new URL('../assets/style.css', import.meta.url), 'utf8');
-  assert.match(css, /\.menu-filters/);
-  assert.match(css, /@media \(max-width: 699px\)[\s\S]*\.menu-filters/);
+  for (const selector of ['.menu-scope-tabs', '.menu-catalog-layout', '.cuisine-directory', '.menu-catalog-results', '.meal-editor-panel']) {
+    assert.match(css, new RegExp(`\\${selector.replace('.', '.')}\\s*\\{`), `missing ${selector} shell styling`);
+  }
+  assert.match(css, /@media \(max-width: 699px\)[\s\S]*\.menu-catalog-layout/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
 });
 
 test('menu filters use the catalog helpers and reduce dependent selections without mutation', () => {
@@ -885,6 +903,57 @@ test('persistence restores a valid editable menu and newest-first confirmed reco
   assert.deepEqual(normaliseRecordsByDate(state.recordsByDate).history.map((item) => item.id), ['latest', 'earlier']);
 });
 
+test('legacy menus receive the complete catalog once while preserving saved edits and records', () => {
+  const storage = memoryStorage();
+  const editedDefault = {
+    ...STARTER_MEALS[0],
+    enabled: false,
+    venue: '我编辑的早餐档',
+    cuisineZone: '我的分类范围',
+    cuisine: '我的菜系',
+    courseFamily: '我的餐类',
+    dishType: '我的餐品',
+    metadata: { labels: ['保留编辑'] },
+  };
+  const legacyMenu = [editedDefault, ...STARTER_MEALS.slice(1, 80), meal('legacy-custom', {
+    name: '我的旧自定义餐',
+    cuisineZone: '我的分类范围',
+    cuisine: '我的菜系',
+    courseFamily: '我的餐类',
+    dishType: '我的餐品',
+  })];
+  const recordsByDate = { '2026-07-13': [record('legacy-record', '午餐', '2026-07-13', 200)] };
+  storage.setItem('yi-shi-gua:v1', JSON.stringify({ version: 1, menu: legacyMenu, recordsByDate }));
+
+  const restored = loadStoredState(storage);
+  const restoredEdit = restored.menu.find((item) => item.id === editedDefault.id);
+  assert.equal(restored.menu.length, STARTER_MEALS.length + 1);
+  assert.ok(restored.menu.some((item) => item.cuisineZone !== '中国菜'), 'world templates must be added');
+  assert.deepEqual(restoredEdit, normaliseMenu([editedDefault])[0], 'matching stable IDs must retain the saved object');
+  assert.deepEqual(restored.recordsByDate, recordsByDate);
+
+  const persisted = JSON.parse(storage.getItem('yi-shi-gua:v1'));
+  assert.equal(persisted.catalogVersion, 1, 'migration must mark the catalog as seeded');
+  const writesAfterMigration = storage.writes;
+  assert.deepEqual(loadStoredState(storage), restored);
+  assert.equal(storage.writes, writesAfterMigration, 'a catalog-marked menu must not be seeded again');
+});
+
+test('catalog-marked menus do not revive deliberately deleted defaults after save and reload', () => {
+  const storage = memoryStorage();
+  const legacyMenu = STARTER_MEALS.slice(0, 81).map((item) => ({ ...item, meals: [...item.meals] }));
+  storage.setItem('yi-shi-gua:v1', JSON.stringify({ version: 1, menu: legacyMenu, recordsByDate: {} }));
+  const migrated = loadStoredState(storage);
+  const removedId = migrated.menu.find((item) => item.cuisineZone !== '中国菜').id;
+  const afterDeletion = { menu: migrated.menu.filter((item) => item.id !== removedId), recordsByDate: migrated.recordsByDate };
+
+  assert.equal(saveStoredState(storage, afterDeletion), true);
+  const persisted = JSON.parse(storage.getItem('yi-shi-gua:v1'));
+  assert.equal(persisted.catalogVersion, 1);
+  const reloaded = loadStoredState(storage);
+  assert.equal(reloaded.menu.some((item) => item.id === removedId), false, 'the deleted default must stay deleted');
+});
+
 test('menu normalisation and local storage round-trip preserve full custom taxonomy', () => {
   const storage = memoryStorage();
   const input = meal('custom-taxonomy', {
@@ -913,6 +982,8 @@ test('persistence safely falls back for broken JSON, bad schema, bad records, an
   const storage = memoryStorage();
   storage.setItem('yi-shi-gua:v1', '{broken');
   assert.deepEqual(loadStoredState(storage), { menu: STARTER_MEALS, recordsByDate: {} });
+  assert.equal(storage.getItem('yi-shi-gua:v1'), '{broken', 'malformed state must remain untouched');
+  assert.equal(storage.writes, 1, 'malformed state must not be rewritten during fallback');
 
   storage.setItem('yi-shi-gua:v1', JSON.stringify({ version: 1, menu: [meal('ok')], recordsByDate: { nope: [record('bad', '宵夜', 'nope')] } }));
   assert.deepEqual(loadStoredState(storage), { menu: STARTER_MEALS, recordsByDate: {} });
@@ -945,8 +1016,10 @@ function record(id, mealPeriod, date, confirmedAt = 0) {
 
 function memoryStorage() {
   const values = new Map();
+  let writes = 0;
   return {
     getItem(key) { return values.has(key) ? values.get(key) : null; },
-    setItem(key, value) { values.set(key, value); },
+    setItem(key, value) { writes += 1; values.set(key, value); },
+    get writes() { return writes; },
   };
 }

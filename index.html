@@ -168,6 +168,16 @@
           <button id="menu-close-button" class="menu-close-button" type="button" aria-label="关闭菜单管理">关闭</button>
         </header>
         <p class="menu-panel-note">所有内容仅保存在这台设备的浏览器中。起始模板均待你确认实际供应地点；启用后才会参与餐签。</p>
+        <nav id="menu-scope-tabs" class="menu-scope-tabs" aria-label="食单范围">
+          <button type="button" data-menu-scope="中国菜">中国菜</button>
+          <button type="button" data-menu-scope="世界料理">世界料理</button>
+          <button type="button" data-menu-scope="我的启用">我的启用</button>
+        </nav>
+        <div class="menu-catalog-layout">
+          <aside id="cuisine-directory" class="cuisine-directory" aria-label="菜系目录">
+            <p id="cuisine-directory-summary" class="cuisine-directory-summary">选择范围后浏览菜系</p>
+          </aside>
+          <section class="menu-catalog-results" aria-label="菜品名单">
         <form id="menu-filters" class="menu-filters" aria-label="食单筛选" onsubmit="return false;">
           <fieldset id="menu-filter-zone" class="menu-filter-zone">
             <legend>范围</legend>
@@ -183,6 +193,10 @@
           <p id="menu-filter-summary" class="menu-filter-summary" aria-live="polite"></p>
         </form>
         <div id="menu-list" class="menu-list" aria-live="polite"></div>
+          <button id="meal-details-trigger" type="button" hidden>编辑所选餐品</button>
+          </section>
+        </div>
+        <aside id="meal-editor-panel" class="meal-editor-panel" hidden aria-label="编辑餐品"></aside>
         <div class="menu-panel-actions">
           <button id="add-meal-button" class="confirm-button" type="button">新增餐品</button>
           <button id="reset-menu-button" class="retry-button" type="button">恢复起始菜单</button>

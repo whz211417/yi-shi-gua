@@ -5,6 +5,7 @@ import { beijingCalendarParts, deriveDivination } from './divination.js';
 
 export const STORAGE_KEY = 'yi-shi-gua:v1';
 const STORAGE_VERSION = 1;
+export const CATALOG_VERSION = 1;
 const REQUIRED_MEAL_FIELDS = ['id', 'name', 'source', 'venue', 'meals', 'staple', 'protein', 'vegetable', 'flavor', 'enabled'];
 const RECENT_HISTORY_WINDOW = 5;
 const MEAL_PERIODS = new Set(['早餐', '午餐', '晚餐']);
@@ -108,7 +109,12 @@ export function loadStoredState(storage) {
     if (!isRecord(parsed) || parsed.version !== STORAGE_VERSION || !isValidMenu(parsed.menu)) return defaultStoredState();
     const records = normaliseRecordsByDate(parsed.recordsByDate);
     if (!records.valid) return defaultStoredState();
-    return { menu: normaliseMenu(parsed.menu), recordsByDate: records.recordsByDate };
+    const state = {
+      menu: needsCatalogMigration(parsed) ? mergeCatalogTemplates(parsed.menu) : normaliseMenu(parsed.menu),
+      recordsByDate: records.recordsByDate,
+    };
+    if (needsCatalogMigration(parsed)) persistCatalogMigration(storage, state);
+    return state;
   } catch {
     return defaultStoredState();
   }
@@ -120,7 +126,7 @@ export function saveStoredState(storage, state) {
     if (!storage || typeof storage.setItem !== 'function' || !isRecord(state) || !isValidMenu(state.menu)) return false;
     const records = normaliseRecordsByDate(state.recordsByDate);
     if (!records.valid) return false;
-    storage.setItem(STORAGE_KEY, JSON.stringify({ version: STORAGE_VERSION, menu: normaliseMenu(state.menu), recordsByDate: records.recordsByDate }));
+    storage.setItem(STORAGE_KEY, JSON.stringify(storedStatePayload(normaliseMenu(state.menu), records.recordsByDate)));
     return true;
   } catch {
     return false;
@@ -228,6 +234,17 @@ export function dailyBalanceTip(records = []) {
 }
 
 function defaultStoredState() { return { menu: normaliseMenu(null), recordsByDate: {} }; }
+function needsCatalogMigration(state) { return !Number.isInteger(state.catalogVersion) || state.catalogVersion < CATALOG_VERSION; }
+function mergeCatalogTemplates(menu) {
+  const existingIds = new Set(menu.map((meal) => meal.id));
+  return normaliseMenu([...menu, ...STARTER_MEALS.filter((meal) => !existingIds.has(meal.id))]);
+}
+function storedStatePayload(menu, recordsByDate) { return { version: STORAGE_VERSION, catalogVersion: CATALOG_VERSION, menu, recordsByDate }; }
+function persistCatalogMigration(storage, state) {
+  try {
+    if (storage && typeof storage.setItem === 'function') storage.setItem(STORAGE_KEY, JSON.stringify(storedStatePayload(state.menu, state.recordsByDate)));
+  } catch { /* Migration remains available for this session when local storage cannot be written. */ }
+}
 function isValidMenu(menu) { return Array.isArray(menu) && menu.length > 0 && menu.every(isUsableMeal) && hasUniqueIds(menu); }
 function isUsableMeal(meal) {
   return isRecord(meal) && REQUIRED_MEAL_FIELDS.every((field) => Object.hasOwn(meal, field)) && hasText(meal.id) && hasText(meal.name)

@@ -879,3 +879,13 @@ h1 span { display: block; white-space: nowrap; }
   .hexagram-result > * { min-width: 0; max-width: 100%; }
   .changed-hexagram { justify-items: center; border-top: 1px solid rgb(210 174 109 / .35); border-left: 0; }
 }
+
+/* Directory browsing shell: dense list first, editing remains opt-in. */
+.menu-scope-tabs { display:flex; gap:.5rem; margin:1rem 0; border-bottom:1px solid var(--line, #4d483c); }
+.menu-scope-tabs button { min-height:2.5rem; padding:.45rem .8rem; background:transparent; color:inherit; border:0; border-bottom:2px solid transparent; }
+.menu-catalog-layout { display:grid; grid-template-columns:minmax(9rem, 14rem) minmax(0, 1fr); gap:1rem; align-items:start; }
+.cuisine-directory { border:1px solid var(--line, #4d483c); border-radius:.75rem; padding:.8rem; background:rgba(255,255,255,.02); }
+.menu-catalog-results { min-width:0; }
+.meal-editor-panel { border:1px solid var(--line, #4d483c); border-radius:.75rem; padding:1rem; margin-top:1rem; }
+@media (max-width: 699px) { .menu-catalog-layout { grid-template-columns:1fr; } .menu-scope-tabs { overflow-x:auto; } }
+@media (prefers-reduced-motion: reduce) { .menu-scope-tabs *, .menu-catalog-layout * { transition:none !important; animation:none !important; } }
