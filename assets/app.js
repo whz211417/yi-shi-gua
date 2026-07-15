@@ -1,5 +1,6 @@
 import { STARTER_MEALS } from './data.js';
 import { FOOD_ORACLES } from './data.js';
+import { normaliseCuisineFields } from './cuisine-catalog.js';
 import { beijingCalendarParts, deriveDivination } from './divination.js';
 
 export const STORAGE_KEY = 'yi-shi-gua:v1';
@@ -28,7 +29,23 @@ export function todayKey(date = new Date()) {
 
 /** Restore the editable starter bank when saved menu data is unusable. */
 export function normaliseMenu(menu) {
-  return isValidMenu(menu) ? cloneMeals(menu) : cloneMeals(STARTER_MEALS);
+  return (isValidMenu(menu) ? menu : STARTER_MEALS).map(normaliseCuisineFields);
+}
+
+/** Create a valid, unlocated local menu entry with the fallback cuisine path. */
+export function newMeal() {
+  return normaliseCuisineFields({
+    id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    name: '新餐品',
+    source: '待确认',
+    venue: '待确认模板',
+    meals: ['午餐'],
+    staple: '米饭',
+    protein: '无明确蛋白',
+    vegetable: '有',
+    flavor: '普通',
+    enabled: true,
+  });
 }
 
 /** Validate and clone date-keyed, confirmed meal records. History is newest-first. */
@@ -177,7 +194,7 @@ export function dailyBalanceTip(records = []) {
   return '今日均衡提示：已记餐食有蔬菜和变化，按你的食量继续安排就好。';
 }
 
-function defaultStoredState() { return { menu: cloneMeals(STARTER_MEALS), recordsByDate: {} }; }
+function defaultStoredState() { return { menu: normaliseMenu(null), recordsByDate: {} }; }
 function isValidMenu(menu) { return Array.isArray(menu) && menu.length > 0 && menu.every(isUsableMeal) && hasUniqueIds(menu); }
 function isUsableMeal(meal) {
   return isRecord(meal) && REQUIRED_MEAL_FIELDS.every((field) => Object.hasOwn(meal, field)) && hasText(meal.id) && hasText(meal.name)
@@ -194,7 +211,6 @@ function dateParts(value) {
   return { year, month, day };
 }
 function hasUniqueIds(meals) { return new Set(meals.map((meal) => meal.id)).size === meals.length; }
-function cloneMeals(meals) { return meals.map((meal) => ({ ...meal, meals: [...meal.meals] })); }
 function cloneRecord(record) { return { ...record, meals: [...record.meals] }; }
 function isRecord(value) { return value !== null && typeof value === 'object' && !Array.isArray(value); }
 function hasText(value) { return typeof value === 'string' && value.trim().length > 0; }
@@ -428,6 +444,5 @@ function initialiseCastingInterface() {
   function selectControl(mealId, labelText, field, values, value) { const label = document.createElement('label'); label.className = 'menu-control'; const text = document.createElement('span'); text.textContent = labelText; const select = document.createElement('select'); values.forEach((optionValue) => { const option = document.createElement('option'); option.value = optionValue; option.textContent = optionValue; option.selected = optionValue === value; select.append(option); }); select.addEventListener('change', () => updateMeal(mealId, { [field]: select.value })); label.append(text, select); return label; }
   function periodControl(meal) { const fieldset = document.createElement('fieldset'); fieldset.className = 'menu-periods'; const legend = document.createElement('legend'); legend.textContent = '餐别'; fieldset.append(legend); [...MEAL_PERIODS].forEach((period) => { const label = document.createElement('label'); const input = document.createElement('input'); input.type = 'checkbox'; input.checked = meal.meals.includes(period); input.addEventListener('change', () => { const meals = [...fieldset.querySelectorAll('input:checked')].map((item) => item.value); updateMeal(meal.id, { meals }); }); input.value = period; const text = document.createElement('span'); text.textContent = period; label.append(input, text); fieldset.append(label); }); return fieldset; }
   function updateMeal(id, changes) { const index = state.menu.findIndex((meal) => meal.id === id); if (index < 0) return; const candidate = { ...state.menu[index], ...changes }; if (!isValidMenu(state.menu.map((meal, itemIndex) => itemIndex === index ? candidate : meal))) { announce('请保留有效名称、档口和至少一个餐别。'); renderMenu(); return; } state.menu[index] = candidate; persist(); renderMenu(); }
-  function newMeal() { const base = state.menu[0] || STARTER_MEALS[0]; return { ...base, meals: ['午餐'], id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name: '新餐品', venue: '自定义档口', enabled: true }; }
   function announce(message) { liveRegion.textContent = ''; window.setTimeout(() => { liveRegion.textContent = message; }, 20); }
 }

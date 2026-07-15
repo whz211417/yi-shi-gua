@@ -23,6 +23,7 @@ import {
   contextualSeed,
   dailyBalanceTip,
   loadStoredState,
+  newMeal,
   normaliseMenu,
   normaliseRecordsByDate,
   oracleFor,
@@ -544,6 +545,23 @@ test('normaliseMenu returns all layered defaults with their enabled Chinese/worl
   const defaults = normaliseMenu(null);
   assert.equal(defaults.length, MEAL_TEMPLATES.length);
   assert.deepEqual(defaults, MEAL_TEMPLATES);
+  for (let index = 0; index < defaults.length; index += 1) {
+    assert.notEqual(defaults[index].meals, MEAL_TEMPLATES[index].meals, `${defaults[index].name} must own its meal-period array`);
+    assert.deepEqual(
+      {
+        cuisineZone: defaults[index].cuisineZone,
+        cuisine: defaults[index].cuisine,
+        courseFamily: defaults[index].courseFamily,
+        dishType: defaults[index].dishType,
+      },
+      {
+        cuisineZone: MEAL_TEMPLATES[index].cuisineZone,
+        cuisine: MEAL_TEMPLATES[index].cuisine,
+        courseFamily: MEAL_TEMPLATES[index].courseFamily,
+        dishType: MEAL_TEMPLATES[index].dishType,
+      },
+    );
+  }
   assert.equal(defaults.filter(({ cuisineZone, enabled }) => cuisineZone === '中国菜' && enabled).length, MEAL_TEMPLATES.filter(({ cuisineZone }) => cuisineZone === '中国菜').length);
   assert.equal(defaults.filter(({ cuisineZone, enabled }) => cuisineZone !== '中国菜' && enabled).length, 0);
 });
@@ -559,7 +577,7 @@ test('normaliseMenu clones fallback and accepted records to protect canonical da
   assert.notEqual(STARTER_MEALS[0].name, 'mutated fallback');
   assert.equal(STARTER_MEALS[0].meals.includes(addedPeriod), false);
 
-  const custom = meal('custom', { name: '自定义轻食' });
+  const custom = meal('custom', { name: '自定义轻食', ...FALLBACK_TAXONOMY });
   const normalised = normaliseMenu([custom]);
   assert.deepEqual(normalised, [custom]);
   assert.notEqual(normalised, [custom]);
@@ -567,6 +585,45 @@ test('normaliseMenu clones fallback and accepted records to protect canonical da
   assert.notEqual(normalised[0].meals, custom.meals);
   normalised[0].meals.push('晚餐');
   assert.equal(custom.meals.includes('晚餐'), false);
+});
+
+test('normaliseMenu migrates valid legacy and partial meal taxonomies to the fallback', () => {
+  const legacy = meal('legacy-menu', { metadata: { createdBy: 'older-version' } });
+  const partial = meal('partial-menu', { cuisineZone: '中国菜', cuisine: '川菜' });
+  const [migratedLegacy] = normaliseMenu([legacy]);
+  const [migratedPartial] = normaliseMenu([partial]);
+
+  for (const migrated of [migratedLegacy, migratedPartial]) {
+    assert.deepEqual(
+      {
+        cuisineZone: migrated.cuisineZone,
+        cuisine: migrated.cuisine,
+        courseFamily: migrated.courseFamily,
+        dishType: migrated.dishType,
+      },
+      FALLBACK_TAXONOMY,
+    );
+  }
+  assert.deepEqual(legacy.metadata, { createdBy: 'older-version' });
+  assert.equal(Object.hasOwn(legacy, 'cuisineZone'), false, 'migration must not mutate legacy input');
+  assert.equal(partial.courseFamily, undefined, 'migration must not mutate partial input');
+});
+
+test('newMeal creates an unlocated meal with fallback taxonomy', () => {
+  const created = newMeal();
+  assert.equal(created.source, '待确认');
+  assert.equal(created.venue, '待确认模板');
+  assert.equal(created.enabled, true);
+  assert.deepEqual(created.meals, ['午餐']);
+  assert.deepEqual(
+    {
+      cuisineZone: created.cuisineZone,
+      cuisine: created.cuisine,
+      courseFamily: created.courseFamily,
+      dishType: created.dishType,
+    },
+    FALLBACK_TAXONOMY,
+  );
 });
 
 test('chooseMeal reports no eligible result and resolves identical scores deterministically', () => {
@@ -603,24 +660,30 @@ test('persistence restores a valid editable menu and newest-first confirmed reco
     },
   };
   assert.equal(saveStoredState(storage, state), true);
-  assert.deepEqual(loadStoredState(storage), state);
+  assert.deepEqual(loadStoredState(storage), { menu: normaliseMenu(state.menu), recordsByDate: state.recordsByDate });
   assert.deepEqual(normaliseRecordsByDate(state.recordsByDate).history.map((item) => item.id), ['latest', 'earlier']);
 });
 
-test('menu normalisation and local storage round-trip preserve optional template taxonomy fields', () => {
+test('menu normalisation and local storage round-trip preserve full custom taxonomy', () => {
   const storage = memoryStorage();
-  const template = MEAL_TEMPLATES.find((meal) => meal.cuisineZone !== '中国菜');
-  assert.ok(template, 'catalog needs a world template');
-  const input = { ...template, meals: [...template.meals] };
+  const input = meal('custom-taxonomy', {
+    cuisineZone: '我的分类范围',
+    cuisine: '我的菜系',
+    courseFamily: '我的餐类',
+    dishType: '我的餐品',
+    metadata: { labels: ['本地菜单'] },
+  });
   const normalised = normaliseMenu([input]);
-  const optionalFields = ['cuisineZone', 'cuisine', 'courseFamily', 'dishType', 'availability', 'isSupplement'];
-  for (const field of optionalFields) assert.equal(normalised[0][field], input[field], `${field} must survive normalisation`);
+  const taxonomyFields = ['cuisineZone', 'cuisine', 'courseFamily', 'dishType'];
+  for (const field of taxonomyFields) assert.equal(normalised[0][field], input[field], `${field} must survive normalisation`);
   assert.notEqual(normalised[0], input);
   assert.notEqual(normalised[0].meals, input.meals);
+  assert.notEqual(normalised[0].metadata, input.metadata);
 
   assert.equal(saveStoredState(storage, { menu: normalised, recordsByDate: {} }), true);
   const restored = loadStoredState(storage).menu[0];
-  for (const field of optionalFields) assert.equal(restored[field], input[field], `${field} must survive local storage`);
+  for (const field of taxonomyFields) assert.equal(restored[field], input[field], `${field} must survive local storage`);
+  assert.deepEqual(restored.metadata, input.metadata);
   assert.notEqual(restored, normalised[0]);
   assert.notEqual(restored.meals, normalised[0].meals);
 });
