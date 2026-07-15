@@ -5,6 +5,11 @@ import { readFileSync } from 'node:fs';
 import { STARTER_MEALS, FOOD_ORACLES } from '../assets/data.js';
 import { MEAL_TEMPLATES } from '../assets/meal-templates.js';
 import {
+  CANTEEN_PLANS,
+  WEATHER_OPTIONS,
+  normaliseStudentWeather,
+} from '../assets/student-meal-model.js';
+import {
   DEFAULT_CUISINE_TAXONOMY,
   FALLBACK_TAXONOMY,
   availableCuisineOptions,
@@ -37,6 +42,42 @@ import {
   scoreMeal,
   todayKey,
 } from '../assets/app.js';
+
+test('canteen plans expose the six-weather vocabulary and normalise legacy weather values', () => {
+  assert.deepEqual(WEATHER_OPTIONS, ['晴热', '晴暖', '阴凉', '雨天', '风大', '寒冷/雨雪']);
+  for (const weather of WEATHER_OPTIONS) assert.equal(normaliseStudentWeather(weather), weather);
+  assert.equal(normaliseStudentWeather('自动以本地日期推演'), '晴暖');
+  assert.equal(normaliseStudentWeather('不考虑'), '晴暖');
+  assert.equal(normaliseStudentWeather('下雨'), '雨天');
+  assert.equal(normaliseStudentWeather('偏冷'), '寒冷/雨雪');
+});
+
+test('canteen plans provide universal complete meals rather than campus availability claims', () => {
+  assert.ok(CANTEEN_PLANS.length >= 12, 'must cover common university canteen meal types');
+  const plansByCategory = new Map(CANTEEN_PLANS.map((plan) => [plan.category, plan]));
+  for (const category of ['自选快餐', '家常小炒', '盖饭', '粉面', '麻辣烫/冒菜', '饺子馄饨', '炒饭炒面', '铁板/煲仔', '汤饭汤面', '早餐', '炸鸡/汉堡', '轻食补餐']) {
+    assert.ok(plansByCategory.has(category), `missing ${category} plan`);
+  }
+
+  assert.equal(new Set(CANTEEN_PLANS.map((plan) => plan.id)).size, CANTEEN_PLANS.length, 'plan ids must be unique');
+  assert.equal(new Set(CANTEEN_PLANS.map((plan) => plan.name)).size, CANTEEN_PLANS.length, 'plan names must be unique');
+  for (const plan of CANTEEN_PLANS) {
+    assert.equal(plan.isCompleteMeal, true, `${plan.name} must be a complete meal`);
+    assert.equal(plan.isSupplement, false, `${plan.name} cannot be a standalone supplement`);
+    assert.match(plan.venue, /通用|窗口|食堂/, `${plan.name} needs a generic canteen window`);
+    assert.match(plan.source, /通用模板/, `${plan.name} must not claim a real campus source`);
+    assert.match(plan.availability, /通用模板|以实际为准|非实际/, `${plan.name} must not claim actual availability`);
+    assert.ok(Array.isArray(plan.dishSuggestions) && plan.dishSuggestions.length >= 2 && plan.dishSuggestions.length <= 4, `${plan.name} needs 2–4 concrete dish suggestions`);
+    assert.ok(plan.dishSuggestions.every((suggestion) => typeof suggestion === 'string' && suggestion.trim().length >= 2), `${plan.name} suggestions must be concrete named dishes`);
+    assert.ok(Array.isArray(plan.fallbacks) && plan.fallbacks.length >= 2, `${plan.name} needs two fallback alternatives`);
+    assert.ok(Array.isArray(plan.weatherTags) && plan.weatherTags.length > 0 && plan.weatherTags.every((weather) => WEATHER_OPTIONS.includes(weather)), `${plan.name} has invalid weather tags`);
+    assert.ok(Array.isArray(plan.trigramTags) && plan.trigramTags.length > 0, `${plan.name} needs trigram tag placeholders`);
+  }
+
+  const fastFood = plansByCategory.get('炸鸡/汉堡');
+  assert.match(fastFood.dishSuggestions.join('、'), /蔬菜|沙拉|汤/, 'fast food must pair with vegetables or soup');
+  assert.ok(CANTEEN_PLANS.every((plan) => !/^(甜品|咖啡|零食)$/.test(plan.category)), 'dessert, coffee, and snacks cannot be standalone plans');
+});
 
 test('trigram export preserves the eight strict remainder rows and order', () => {
   assert.deepEqual(TRIGRAMS, [
