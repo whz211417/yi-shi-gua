@@ -1,7 +1,12 @@
 import { DEFAULT_CUISINE_TAXONOMY } from './cuisine-catalog.js';
 
-const BREAKFAST_ONLY = /咖啡|奶茶|甜品|糕|果蔬昔|菠萝油|绿豆糕|可丽露|提拉米苏|巴克拉瓦|可颂|贝果|松饼|咖椰吐司|班尼迪克蛋|点心|小吃|包子|烧饼|煎饼|粥/;
-const SUPPLEMENT = /咖啡|奶茶|甜品|糕|果蔬昔|菠萝油|绿豆糕|可丽露|提拉米苏|巴克拉瓦/;
+const BREAKFAST_DISH_TYPES = new Set([
+  '虾饺', '烧卖', '肠粉', '汤包', '狗不理包子', '粘豆包', '煎饼果子', '咖椰吐司', '班尼迪克蛋',
+]);
+const SUPPLEMENT_DISH_TYPES = new Set([
+  '港式奶茶', '珍珠奶茶', '糖油粑粑', '定胜糕', '鲜花饼', '绿豆糕', '菠萝油',
+  '可丽露', '提拉米苏', '巴克拉瓦', '果蔬昔', '美式咖啡', '拿铁', '可颂', '贝果', '芝士蛋糕',
+]);
 
 function pathsInZone(cuisineZone) {
   return Object.entries(DEFAULT_CUISINE_TAXONOMY[cuisineZone]).flatMap(([cuisine, families]) => (
@@ -50,7 +55,7 @@ function proteinFor(path) {
 
 function vegetableFor(path) {
   const text = label(path);
-  if (SUPPLEMENT.test(text)) return '无';
+  if (SUPPLEMENT_DISH_TYPES.has(path.dishType)) return '无';
   if (/素|蔬|菌|沙拉|豆腐|时蔬|藜麦|果蔬/.test(text)) return '有';
   return '少';
 }
@@ -65,11 +70,11 @@ function flavorFor(path) {
 }
 
 function mealsFor(path) {
-  return BREAKFAST_ONLY.test(label(path)) ? ['早餐'] : ['午餐', '晚餐'];
+  return (BREAKFAST_DISH_TYPES.has(path.dishType) || SUPPLEMENT_DISH_TYPES.has(path.dishType)) ? ['早餐'] : ['午餐', '晚餐'];
 }
 
 function createTemplate(path, variant, { enabled, nameSuffix = '', overrides = {} }) {
-  const isSupplement = SUPPLEMENT.test(label(path));
+  const isSupplement = SUPPLEMENT_DISH_TYPES.has(path.dishType);
   return {
     id: stableId(path, variant),
     name: `${path.cuisine}·${path.dishType}${nameSuffix}`,
@@ -96,26 +101,40 @@ const CHINESE_PATHS = pathsInZone('中国菜');
 const WORLD_PATHS = allWorldPaths();
 
 const EXTRA_CHINESE_VARIANTS = [
-  ['宫保鸡丁', '·配时蔬模板'], ['麻婆豆腐', '·配米饭模板'], ['担担面', '·早餐模板'],
-  ['白切鸡', '·配青菜模板'], ['肠粉', '·早餐模板'], ['小炒肉', '·配米饭模板'],
-  ['湖南米粉', '·早餐模板'], ['葱烧海参', '·配米饭模板'], ['清炖狮子头', '·晚餐模板'],
-  ['盐水鸭', '·配时蔬模板'], ['龙井虾仁', '·配米饭模板'], ['佛跳墙', '·宴席候选模板'],
-  ['北京烤鸭', '·聚餐候选模板'], ['锅包肉', '·配米饭模板'], ['兰州牛肉面', '·午餐模板'],
-  ['过桥米线', '·午餐模板'], ['潮汕牛肉火锅', '·聚餐候选模板'], ['梅菜扣肉', '·配时蔬模板'],
-  ['钵钵鸡', '·麻辣烫候选模板'], ['紫菜蛋花汤', '·配白粥早餐模板'],
+  { dishType: '宫保鸡丁', key: 'with-vegetables', suffix: '·配时蔬模板' },
+  { dishType: '麻婆豆腐', key: 'with-rice', suffix: '·配米饭模板' },
+  { dishType: '担担面', key: 'breakfast', suffix: '·早餐模板', breakfast: true },
+  { dishType: '白切鸡', key: 'with-greens', suffix: '·配青菜模板' },
+  { dishType: '肠粉', key: 'breakfast', suffix: '·早餐模板', breakfast: true },
+  { dishType: '小炒肉', key: 'with-rice', suffix: '·配米饭模板' },
+  { dishType: '湖南米粉', key: 'breakfast', suffix: '·早餐模板', breakfast: true },
+  { dishType: '葱烧海参', key: 'with-rice', suffix: '·配米饭模板' },
+  { dishType: '清炖狮子头', key: 'dinner', suffix: '·晚餐模板' },
+  { dishType: '盐水鸭', key: 'with-vegetables', suffix: '·配时蔬模板' },
+  { dishType: '龙井虾仁', key: 'with-rice', suffix: '·配米饭模板' },
+  { dishType: '佛跳墙', key: 'banquet', suffix: '·宴席候选模板' },
+  { dishType: '北京烤鸭', key: 'shared', suffix: '·聚餐候选模板' },
+  { dishType: '锅包肉', key: 'with-rice', suffix: '·配米饭模板' },
+  { dishType: '兰州牛肉面', key: 'lunch', suffix: '·午餐模板' },
+  { dishType: '过桥米线', key: 'lunch', suffix: '·午餐模板' },
+  { dishType: '潮汕牛肉火锅', key: 'shared', suffix: '·聚餐候选模板' },
+  { dishType: '梅菜扣肉', key: 'with-vegetables', suffix: '·配时蔬模板' },
+  { dishType: '钵钵鸡', key: 'malatang', suffix: '·麻辣烫候选模板' },
+  { dishType: '紫菜蛋花汤', key: 'porridge-breakfast', suffix: '·配白粥早餐模板', porridgeBreakfast: true },
 ];
 
 const pathByDishType = new Map(CHINESE_PATHS.map((path) => [path.dishType, path]));
 const chineseBaseTemplates = CHINESE_PATHS.map((path) => createTemplate(path, 'base', { enabled: true }));
-const chineseVariantTemplates = EXTRA_CHINESE_VARIANTS.map(([dishType, nameSuffix], index) => {
-  const path = pathByDishType.get(dishType);
-  if (!path) throw new Error(`缺少中国菜模板路径：${dishType}`);
-  const breakfast = /早餐/.test(nameSuffix);
-  const porridgeBreakfast = dishType === '紫菜蛋花汤';
-  return createTemplate(path, `variant-${index + 1}`, {
+const chineseVariantTemplates = EXTRA_CHINESE_VARIANTS.map((variant) => {
+  const path = pathByDishType.get(variant.dishType);
+  if (!path) throw new Error(`缺少中国菜模板路径：${variant.dishType}`);
+  const overrides = variant.porridgeBreakfast
+    ? { meals: ['早餐'], staple: '粥类' }
+    : (variant.breakfast ? { meals: ['早餐'] } : {});
+  return createTemplate(path, `variant-${variant.key}`, {
     enabled: true,
-    nameSuffix,
-    overrides: porridgeBreakfast ? { meals: ['早餐'], staple: '粥类' } : (breakfast ? { meals: ['早餐'] } : {}),
+    nameSuffix: variant.suffix,
+    overrides,
   });
 });
 const worldCuisineTemplates = WORLD_PATHS.map((path) => createTemplate(path, 'base', { enabled: false }));

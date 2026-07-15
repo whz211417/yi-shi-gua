@@ -222,6 +222,11 @@ test('layered meal template catalog supplies valid Chinese and world cuisine cov
   for (const staple of ['米饭', '粉类', '面食', '粥类']) assert.ok(chineseTemplates.some((template) => template.staple === staple), `missing Chinese ${staple} template`);
   for (const flavor of ['汤类', '油炸']) assert.ok(chineseTemplates.some((template) => template.flavor === flavor), `missing Chinese ${flavor} template`);
   assert.ok(MEAL_TEMPLATES.every((template) => template.venue === '待确认模板'), 'templates must make unconfirmed availability visible');
+  const templateByName = new Map(MEAL_TEMPLATES.map((template) => [template.name, template]));
+  assert.deepEqual(templateByName.get('川菜·钵钵鸡').meals, ['午餐', '晚餐']);
+  assert.equal(templateByName.get('川菜·钵钵鸡').isSupplement, false);
+  assert.equal(templateByName.get('韩餐·炒年糕').isSupplement, false);
+  assert.ok(MEAL_TEMPLATES.every((template) => !/variant-\d+$/.test(template.id)), 'variant ids must be semantic rather than positional');
   const chineseNames = chineseTemplates.map(({ name }) => name).join(' / ');
   for (const [label, pattern] of [
     ['dumpling or bun', /饺|包/],
