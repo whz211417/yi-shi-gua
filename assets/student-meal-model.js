@@ -167,6 +167,186 @@ export function recommendCanteenPlan(context = {}) {
   };
 }
 
+const OUTING_TRIGRAM_PATTERNS = Object.freeze({
+  坎: /汤|羹|锅|面|粉|粥/,
+  离: /辣|烤|炸|炒|咖喱|焗/,
+  震: /饭|面|粉|三明治|汉堡|卷|饺/,
+  巽: /沙拉|素|蔬|凉|刺身|寿司/,
+  艮: /饭|面|粉|饺|包|锅/,
+  兑: /寿司|火锅|烧烤|甜|点心|分享/,
+  乾: /牛|鸡|肉|鱼|虾|蛋|豆腐/,
+  坤: /家常|饭|炒|面|粉|菜/,
+});
+
+const OUTING_WEATHER_PATTERNS = Object.freeze({
+  晴热: /沙拉|凉|刺身|寿司|冷面|冰/,
+  晴暖: /饭|面|粉|菜|肉/,
+  阴凉: /汤|羹|锅|面|粉/,
+  雨天: /汤|羹|锅|面|粉/,
+  风大: /汤|羹|锅|面|粉/,
+  '寒冷/雨雪': /汤|羹|锅|面|粉|炖/,
+});
+
+const OUTING_AVAILABILITY_DISCLAIMER = '附近实际供应需自行确认；本推荐不代表任何餐馆当日菜单。';
+
+function nonEmptyText(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function outingMenuAndContext(menuOrContext, additionalContext) {
+  if (Array.isArray(menuOrContext)) return { menu: menuOrContext, context: additionalContext && typeof additionalContext === 'object' ? additionalContext : {} };
+  const context = menuOrContext && typeof menuOrContext === 'object' ? menuOrContext : {};
+  const menu = Array.isArray(context.menu) ? context.menu : (Array.isArray(context.meals) ? context.meals : []);
+  return { menu, context };
+}
+
+function usableOutingMeals(menu) {
+  return menu.flatMap((meal) => {
+    if (!meal || typeof meal !== 'object' || meal.enabled !== true) return [];
+    const cuisineZone = nonEmptyText(meal.cuisineZone);
+    const cuisine = nonEmptyText(meal.cuisine);
+    const courseFamily = nonEmptyText(meal.courseFamily);
+    const dishType = nonEmptyText(meal.dishType);
+    if (!cuisineZone || !cuisine || !courseFamily || !dishType) return [];
+    return [{
+      id: nonEmptyText(meal.id) || `${cuisineZone}/${cuisine}/${courseFamily}/${dishType}`,
+      cuisineZone,
+      cuisine,
+      courseFamily,
+      dishType,
+    }];
+  });
+}
+
+function outingDishScore(dish, context) {
+  const { upper, lower } = primaryTrigrams(context);
+  const weather = normaliseStudentWeather(context.weather);
+  const text = `${dish.cuisine} ${dish.courseFamily} ${dish.dishType}`;
+  const trigramScore = [upper, lower]
+    .filter((trigram) => OUTING_TRIGRAM_PATTERNS[trigram]?.test(text)).length * 3;
+  const weatherScore = OUTING_WEATHER_PATTERNS[weather].test(text) ? 4 : 0;
+  const recentRecords = normaliseRecentRecords(context.recentRecords);
+  const repeatPenalty = recentRecords.some((record) => record?.dishType === dish.dishType)
+    ? 6
+    : (recentRecords.some((record) => record?.cuisine === dish.cuisine && record?.cuisineZone === dish.cuisineZone) ? 3 : 0);
+  return trigramScore + weatherScore - repeatPenalty;
+}
+
+function groupedOutingCuisines(menu, context) {
+  const cuisineGroups = new Map();
+  for (const dish of usableOutingMeals(menu)) {
+    const cuisineKey = `${dish.cuisineZone}\u0000${dish.cuisine}`;
+    if (!cuisineGroups.has(cuisineKey)) {
+      cuisineGroups.set(cuisineKey, {
+        cuisineKey,
+        cuisineZone: dish.cuisineZone,
+        cuisine: dish.cuisine,
+        paths: new Map(),
+      });
+    }
+    const group = cuisineGroups.get(cuisineKey);
+    const pathKey = `${cuisineKey}\u0000${dish.courseFamily}\u0000${dish.dishType}`;
+    if (!group.paths.has(pathKey)) group.paths.set(pathKey, dish);
+  }
+
+  return [...cuisineGroups.values()]
+    .map((group) => {
+      const dishes = [...group.paths.values()];
+      const dishTypes = [...new Set(dishes.map(({ dishType }) => dishType))];
+      const scoredDishes = dishes
+        .map((dish) => ({ dish, score: outingDishScore(dish, context), tieBreaker: stableSeedValue(context.seed, dish.id) }))
+        .sort((left, right) => right.score - left.score || right.tieBreaker - left.tieBreaker || left.dish.id.localeCompare(right.dish.id));
+      const score = scoredDishes.reduce((total, item) => total + item.score, 0) / scoredDishes.length;
+      return {
+        ...group,
+        dishTypes,
+        scoredDishes,
+        score,
+        tieBreaker: stableSeedValue(context.seed, group.cuisineKey),
+      };
+    })
+    // A cuisine must have enough user-enabled concrete choices to provide the
+    // requested 2–4 suggestions without inventing unavailable dishes.
+    .filter((group) => group.dishTypes.length >= 2)
+    .sort((left, right) => right.score - left.score || right.tieBreaker - left.tieBreaker || left.cuisineKey.localeCompare(right.cuisineKey));
+}
+
+function outingCuisineSummary(group, suggestionLimit = 4) {
+  const dishSuggestions = group.scoredDishes
+    .map(({ dish }) => dish.dishType)
+    .filter((dishType, index, dishes) => dishes.indexOf(dishType) === index)
+    .slice(0, suggestionLimit);
+  return {
+    cuisine: group.cuisine,
+    cuisineZone: group.cuisineZone,
+    cuisinePath: `${group.cuisineZone} / ${group.cuisine}`,
+    cuisineLabel: `${group.cuisineZone}·${group.cuisine}（校外菜系）`,
+    dishSuggestions,
+  };
+}
+
+/**
+ * Selects a cuisine for an outing exclusively from enabled, fully classified
+ * editable-menu entries. Weather and trigrams are soft rankings; the supplied
+ * seed resolves ties reproducibly. It never infers nearby availability.
+ */
+export function recommendOutingCuisine(menuOrContext = {}, additionalContext = {}) {
+  const { menu, context } = outingMenuAndContext(menuOrContext, additionalContext);
+  const weather = normaliseStudentWeather(context.weather);
+  const tendencies = dietaryTendencyForTrigrams(context);
+  const candidates = groupedOutingCuisines(menu, { ...context, weather });
+
+  if (candidates.length === 0) {
+    const reason = '当前没有可推荐的已启用外出菜系；请在菜单库为同一菜系启用至少两项具体菜品后再试。';
+    return {
+      cuisine: null,
+      cuisineZone: null,
+      cuisinePath: null,
+      cuisineLabel: null,
+      dishSuggestions: [],
+      suggestions: [],
+      fallbackOptions: [],
+      fallbacks: [],
+      tendencies,
+      score: null,
+      reason,
+      reasons: [
+        { label: '卦象取向', text: tendencies.length > 0 ? tendencies.map(({ trigram, tendency }) => `${trigram}卦偏向${tendency}`).join('；') : '未提供有效上下卦，无法增加卦象排序权重。' },
+        { label: '菜单范围', text: '外出推荐只会使用当前菜单中已启用、且分类完整的菜品。' },
+        { label: '下一步', text: '请至少为一个菜系启用两项具体菜品，再重新获取推荐。' },
+      ],
+      disclaimer: OUTING_AVAILABILITY_DISCLAIMER,
+      isEntertainment: true,
+      isOutingCuisine: true,
+    };
+  }
+
+  const [selected, ...remaining] = candidates;
+  const summary = outingCuisineSummary(selected);
+  const fallbackOptions = remaining.slice(0, 2).map((group) => outingCuisineSummary(group, 2));
+  const tendencyText = tendencies.length > 0
+    ? tendencies.map(({ trigram, tendency }) => `${trigram}卦偏向${tendency}`).join('；')
+    : '未提供有效上下卦，按已启用菜系的通用排序推荐。';
+  const weatherText = OUTING_WEATHER_PATTERNS[weather] ? `${weather}仅作为对菜品名称与分类的轻度排序，不排除其他已启用菜系。` : '天气仅作为轻度排序。';
+
+  return {
+    ...summary,
+    suggestions: [...summary.dishSuggestions],
+    fallbackOptions,
+    fallbacks: fallbackOptions,
+    tendencies,
+    score: selected.score + selected.tieBreaker,
+    reasons: [
+      { label: '卦象取向', text: tendencyText },
+      { label: '天气倾向', text: weatherText },
+      { label: '菜单范围', text: `仅从当前菜单中已启用的完整分类路径选择；${summary.cuisineLabel}作为外出菜系呈现。` },
+    ],
+    disclaimer: OUTING_AVAILABILITY_DISCLAIMER,
+    isEntertainment: true,
+    isOutingCuisine: true,
+  };
+}
+
 const UNIVERSAL_SOURCE = '通用模板（非实际校园供应）';
 const UNIVERSAL_AVAILABILITY = '通用模板，以实际食堂当日供应为准';
 

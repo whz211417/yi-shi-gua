@@ -10,6 +10,7 @@ import {
   dietaryTendencyForTrigrams,
   normaliseStudentWeather,
   recommendCanteenPlan,
+  recommendOutingCuisine,
   scoreStudentPlan,
 } from '../assets/student-meal-model.js';
 import {
@@ -152,6 +153,58 @@ test('canteen recommendation is deterministic, practical, and explains its limit
   assert.equal(first.isEntertainment, true);
   assert.equal(first.isUniversalTemplate, true);
   assert.notEqual(first.plan.id, 'universal-hot-soup-meal', 'a newest recent repeat receives a soft penalty when alternatives exist');
+});
+
+test('outing cuisine uses only enabled taxonomy paths and returns concrete dishes deterministically', () => {
+  const enabledJapanese = [
+    meal('japan-sushi', { enabled: true, cuisineZone: '东亚料理', cuisine: '日料', courseFamily: '刺身寿司', dishType: '寿司' }),
+    meal('japan-udon', { enabled: true, cuisineZone: '东亚料理', cuisine: '日料', courseFamily: '面食', dishType: '豚骨乌冬面' }),
+    meal('japan-katsu', { enabled: true, cuisineZone: '东亚料理', cuisine: '日料', courseFamily: '炸物', dishType: '炸猪排定食' }),
+  ];
+  const disabledKorean = [
+    meal('korea-bibimbap', { enabled: false, cuisineZone: '东亚料理', cuisine: '韩餐', courseFamily: '米饭', dishType: '石锅拌饭' }),
+    meal('korea-noodle', { enabled: false, cuisineZone: '东亚料理', cuisine: '韩餐', courseFamily: '面食', dishType: '冷面' }),
+  ];
+  const context = {
+    menu: [...enabledJapanese, ...disabledKorean],
+    primary: { upper: '坎', lower: '巽' },
+    weather: '雨天',
+    seed: '2026-07-15-42',
+  };
+  const first = recommendOutingCuisine(context);
+  const second = recommendOutingCuisine(context);
+
+  assert.deepEqual(first, second, 'identical menu and context must give an identical outing recommendation');
+  assert.equal(first.cuisine, '日料', 'a user-enabled world cuisine remains eligible');
+  assert.equal(first.cuisineZone, '东亚料理');
+  assert.equal(first.cuisineLabel, '东亚料理·日料（校外菜系）');
+  assert.deepEqual(first.dishSuggestions, ['豚骨乌冬面', '寿司', '炸猪排定食']);
+  assert.ok(first.dishSuggestions.length >= 2 && first.dishSuggestions.length <= 4);
+  assert.ok(first.dishSuggestions.every((dishType) => enabledJapanese.some((meal) => meal.dishType === dishType)));
+  assert.ok(!first.dishSuggestions.some((dishType) => disabledKorean.some((meal) => meal.dishType === dishType)));
+  assert.deepEqual(first.reasons.map(({ label }) => label), ['卦象取向', '天气倾向', '菜单范围']);
+  assert.match(first.disclaimer, /附近.*实际.*供应|实际.*附近.*供应/);
+  assert.doesNotMatch(JSON.stringify(first), /门店|店铺|价格|距离/);
+});
+
+test('outing cuisine can recommend enabled Chinese cuisine but returns actionable null when no enabled cuisine has two dishes', () => {
+  const chineseMenu = [
+    meal('sichuan-gongbao', { enabled: true, cuisineZone: '中国菜', cuisine: '川菜', courseFamily: '热菜', dishType: '宫保鸡丁' }),
+    meal('sichuan-mapo', { enabled: true, cuisineZone: '中国菜', cuisine: '川菜', courseFamily: '热菜', dishType: '麻婆豆腐' }),
+  ];
+  const chinese = recommendOutingCuisine(chineseMenu, { weather: '晴暖', seed: 'chinese-outing' });
+  assert.equal(chinese.cuisine, '川菜');
+  assert.equal(chinese.cuisineLabel, '中国菜·川菜（校外菜系）');
+  assert.deepEqual(chinese.dishSuggestions.sort(), ['宫保鸡丁', '麻婆豆腐']);
+
+  const empty = recommendOutingCuisine({ menu: [
+    meal('disabled-world', { enabled: false, cuisineZone: '东亚料理', cuisine: '日料', courseFamily: '刺身寿司', dishType: '寿司' }),
+    meal('one-enabled-world', { enabled: true, cuisineZone: '东亚料理', cuisine: '日料', courseFamily: '面食', dishType: '乌冬面' }),
+  ] });
+  assert.equal(empty.cuisine, null);
+  assert.deepEqual(empty.dishSuggestions, []);
+  assert.match(empty.reason, /启用.*至少两项|至少两项.*启用/);
+  assert.match(empty.disclaimer, /附近.*实际.*供应|实际.*附近.*供应/);
 });
 
 test('trigram export preserves the eight strict remainder rows and order', () => {
