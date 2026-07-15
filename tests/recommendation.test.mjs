@@ -2,6 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { STARTER_MEALS, FOOD_ORACLES } from '../assets/data.js';
+import {
+  FALLBACK_TAXONOMY,
+  availableCuisineOptions,
+  cuisinePath,
+  filterMealsByCuisine,
+  normaliseCuisineFields,
+} from '../assets/cuisine-catalog.js';
 import { HEXAGRAMS, TRIGRAMS } from '../assets/hexagrams.js';
 import {
   beijingCalendarParts,
@@ -171,6 +178,96 @@ test('food oracle map has 64 gentle entertainment-only entries', () => {
     assert.ok(oracle.title.length > 1 && oracle.line.length > 3);
     assert.match(oracle.line, /娱乐|仅作|不作/);
   }
+});
+
+test('cuisine taxonomy gives legacy meals a coherent fallback without losing legacy data', () => {
+  const legacy = meal('legacy', { meals: ['午餐'], metadata: { source: 'old-menu' } });
+  const normalised = normaliseCuisineFields(legacy);
+
+  assert.deepEqual(
+    {
+      cuisineZone: normalised.cuisineZone,
+      cuisine: normalised.cuisine,
+      courseFamily: normalised.courseFamily,
+      dishType: normalised.dishType,
+    },
+    FALLBACK_TAXONOMY,
+  );
+  assert.equal(normalised.id, 'legacy');
+  assert.deepEqual(normalised.metadata, { source: 'old-menu' });
+  assert.equal(cuisinePath(legacy), '中国菜 / 中式日常 / 其他中式 / 自定义');
+});
+
+test('cuisine taxonomy retains a valid Chinese meal path', () => {
+  const mealWithCuisine = meal('gongbao', {
+    name: '宫保鸡丁',
+    cuisineZone: '中国菜',
+    cuisine: '川菜',
+    courseFamily: '热菜',
+    dishType: '宫保鸡丁',
+  });
+
+  assert.deepEqual(normaliseCuisineFields(mealWithCuisine), mealWithCuisine);
+  assert.equal(cuisinePath(mealWithCuisine), '中国菜 / 川菜 / 热菜 / 宫保鸡丁');
+});
+
+test('cuisine filters compose zone, cuisine, family, enabled state, and text search', () => {
+  const meals = [
+    meal('gongbao', { name: '宫保鸡丁', cuisineZone: '中国菜', cuisine: '川菜', courseFamily: '热菜', dishType: '宫保鸡丁' }),
+    meal('mapo-disabled', { name: '麻婆豆腐', enabled: false, cuisineZone: '中国菜', cuisine: '川菜', courseFamily: '热菜', dishType: '麻婆豆腐' }),
+    meal('sushi', { name: '东瀛午餐', cuisineZone: '东亚料理', cuisine: '日料', courseFamily: '主食', dishType: '寿司' }),
+  ];
+
+  assert.deepEqual(
+    filterMealsByCuisine(meals, {
+      zone: '中国菜',
+      cuisine: '川菜',
+      family: '热菜',
+      enabledOnly: true,
+      query: ' 宫保 ',
+    }).map((item) => item.id),
+    ['gongbao'],
+  );
+  assert.deepEqual(filterMealsByCuisine(meals, { query: '寿司' }).map((item) => item.id), ['sushi']);
+});
+
+test('cuisine options contain only actual normalised choices and respect upstream filters', () => {
+  const meals = [
+    meal('legacy'),
+    meal('gongbao', { cuisineZone: '中国菜', cuisine: '川菜', courseFamily: '热菜', dishType: '宫保鸡丁' }),
+    meal('sushi', { cuisineZone: '东亚料理', cuisine: '日料', courseFamily: '主食', dishType: '寿司' }),
+  ];
+
+  assert.deepEqual(availableCuisineOptions(meals, { zone: '中国菜' }), {
+    zones: ['东亚料理', '中国菜'],
+    cuisines: ['中式日常', '川菜'],
+    families: ['其他中式', '热菜'],
+  });
+  assert.deepEqual(availableCuisineOptions(meals, { zone: '欧洲料理' }), {
+    zones: ['东亚料理', '中国菜'],
+    cuisines: [],
+    families: [],
+  });
+});
+
+test('cuisine utilities leave source meals and nested fields untouched and return original meal objects', () => {
+  const source = meal('custom', {
+    meals: ['午餐'],
+    metadata: { labels: ['keep'] },
+    cuisineZone: '中国菜',
+    cuisine: '川菜',
+    courseFamily: '热菜',
+    dishType: '宫保鸡丁',
+  });
+  const normalised = normaliseCuisineFields(source);
+  normalised.meals.push('晚餐');
+  normalised.metadata.labels.push('changed');
+
+  assert.deepEqual(source.meals, ['午餐']);
+  assert.deepEqual(source.metadata.labels, ['keep']);
+  assert.notEqual(normalised, source);
+  assert.notEqual(normalised.metadata, source.metadata);
+  assert.equal(filterMealsByCuisine([source], { cuisine: '川菜' })[0], source);
 });
 
 test('chooseMeal excludes wrong period, place, disabled, and rejected meals', () => {
