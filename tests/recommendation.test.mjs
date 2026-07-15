@@ -407,6 +407,36 @@ test('South Asian, European and American cuisines provide concrete, distinct dis
   }
 });
 
+test('the final world cuisine catalogues provide specific, broad coverage and preserve coffee supplement paths', () => {
+  const cuisines = ['土耳其', '中东风味', '地中海料理', '轻食沙拉', '三明治汉堡', '咖啡烘焙'];
+  const examples = {
+    土耳其: ['阿达纳烤肉串', '埃佐盖林扁豆汤', '库内费'],
+    中东风味: ['沙威玛', '马克卢巴', '法拉费'],
+    地中海料理: ['希腊沙拉', '瓦伦西亚海鲜饭', '普罗旺斯炖菜'],
+    轻食沙拉: ['鸡胸肉凯撒沙拉', '三文鱼糙米碗', '隔夜燕麦'],
+    三明治汉堡: ['BLT三明治', '鲁本三明治', '经典芝士汉堡'],
+    咖啡烘焙: ['美式咖啡', '卡布奇诺', '黄油可颂', '巴斯克芝士蛋糕'],
+  };
+  const catalogue = Object.values(DEFAULT_CUISINE_TAXONOMY);
+
+  for (const cuisine of cuisines) {
+    const families = catalogue.flatMap((zone) => Object.entries(zone)).find(([name]) => name === cuisine)?.[1];
+    const dishes = Object.values(families).flat();
+    assert.ok(Object.keys(families).length >= 4, `${cuisine} must provide at least four meaningful course families`);
+    assert.ok(dishes.length >= 20, `${cuisine} must provide at least 20 dish types`);
+    assert.equal(new Set(dishes).size, dishes.length, `${cuisine} dish types must be distinct`);
+    for (const dish of examples[cuisine]) assert.ok(dishes.includes(dish), `${cuisine} is missing concrete dish ${dish}`);
+  }
+
+  const coffeeBakery = catalogue.flatMap((zone) => Object.entries(zone)).find(([name]) => name === '咖啡烘焙')?.[1];
+  assert.deepEqual(Object.keys(coffeeBakery), ['咖啡饮品', '其他饮品', '烘焙点心', '甜品']);
+  assert.ok(Object.values(coffeeBakery).flat().every((dish) => !['咖啡', '烘焙', '甜品', '蛋糕', '面包', '饮料'].includes(dish)), 'coffee and bakery entries must be explicit menu items rather than generic labels');
+  const protectedSupplements = new Set(['美式咖啡', '拿铁', '可颂', '贝果', '芝士蛋糕']);
+  const coffeeTemplates = MEAL_TEMPLATES.filter(({ cuisine, dishType }) => cuisine === '咖啡烘焙' && protectedSupplements.has(dishType));
+  assert.equal(coffeeTemplates.length, protectedSupplements.size, 'existing coffee and bakery supplement paths must remain available');
+  assert.ok(coffeeTemplates.every(({ isSupplement, meals }) => isSupplement === true && meals.length === 1 && meals[0] === '早餐'), 'existing coffee and bakery items must remain safe supplements');
+});
+
 test('eight classical cuisines have no cross-cuisine duplicates or forbidden generic labels', () => {
   const classicalCuisines = ['川菜', '粤菜', '湘菜', '鲁菜', '苏菜', '浙菜', '闽菜', '徽菜'];
   const dishTypes = classicalCuisines.flatMap((cuisine) => Object.values(DEFAULT_CUISINE_TAXONOMY.中国菜[cuisine]).flat());
