@@ -41,6 +41,7 @@ import {
   oracleFor,
   oracleForContext,
   reduceMenuFilters,
+  recommendMealForCasting,
   resolveWeather,
   saveStoredState,
   scoreMeal,
@@ -205,6 +206,40 @@ test('outing cuisine can recommend enabled Chinese cuisine but returns actionabl
   assert.deepEqual(empty.dishSuggestions, []);
   assert.match(empty.reason, /启用.*至少两项|至少两项.*启用/);
   assert.match(empty.disclaimer, /附近.*实际.*供应|实际.*附近.*供应/);
+});
+
+test('casting adapts practical canteen and outing recommendations into confirmable meal records', () => {
+  const divination = { upper: { name: '坎' }, lower: { name: '艮' } };
+  const context = { dateKey: '2026-07-15', mealPeriod: '午餐', weather: '雨天', seed: 'cast-42' };
+  const enabledOutingMenu = [
+    meal('japan-udon', { enabled: true, cuisineZone: '东亚料理', cuisine: '日料', courseFamily: '面食', dishType: '豚骨乌冬面' }),
+    meal('japan-sushi', { enabled: true, cuisineZone: '东亚料理', cuisine: '日料', courseFamily: '刺身寿司', dishType: '寿司' }),
+  ];
+
+  for (const place of ['在学校', '不想走远']) {
+    const result = recommendMealForCasting({ divination, menu: enabledOutingMenu, context: { ...context, place } });
+    assert.ok(result.meal, `${place} must produce a canteen record`);
+    assert.equal(result.meal.source, '食堂');
+    assert.equal(result.meal.title, result.meal.name);
+    assert.equal(result.recommendation.isUniversalTemplate, true);
+    assertConfirmationRecord(result.meal, context);
+  }
+
+  const outing = recommendMealForCasting({ divination, menu: enabledOutingMenu, context: { ...context, place: '校外' } });
+  assert.ok(outing.meal, 'outside casting must produce a cuisine record');
+  assert.equal(outing.meal.source, '校外');
+  assert.equal(outing.meal.title, outing.recommendation.cuisineLabel);
+  assert.equal(outing.meal.name, outing.recommendation.cuisineLabel);
+  assert.equal(outing.recommendation.isOutingCuisine, true);
+  assertConfirmationRecord(outing.meal, context);
+
+  const unavailable = recommendMealForCasting({
+    divination,
+    menu: enabledOutingMenu.map((item) => ({ ...item, enabled: false })),
+    context: { ...context, place: '校外' },
+  });
+  assert.equal(unavailable.meal, null);
+  assert.match(unavailable.reason, /启用.*至少两项|至少两项.*启用/);
 });
 
 test('trigram export preserves the eight strict remainder rows and order', () => {
@@ -1209,6 +1244,18 @@ function meal(id, overrides = {}) {
 
 function record(id, mealPeriod, date, confirmedAt = 0) {
   return { ...meal(id), mealPeriod, date, confirmedAt };
+}
+
+function assertConfirmationRecord(selected, context) {
+  assert.ok(typeof selected.id === 'string' && selected.id.length > 0);
+  assert.ok(typeof selected.name === 'string' && selected.name.length > 0);
+  assert.ok(Array.isArray(selected.meals) && selected.meals.includes(context.mealPeriod));
+  assert.equal(selected.mealPeriod, context.mealPeriod);
+  for (const field of ['staple', 'protein', 'vegetable', 'flavor', 'venue', 'reason']) assert.ok(selected[field], `${field} must be preserved for confirmation`);
+  const records = normaliseRecordsByDate({
+    [context.dateKey]: [{ ...selected, date: context.dateKey, confirmedAt: 1 }],
+  });
+  assert.equal(records.valid, true, 'selected recommendation must remain persistable in the food log');
 }
 
 function memoryStorage() {

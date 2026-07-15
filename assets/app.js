@@ -2,6 +2,7 @@ import { STARTER_MEALS } from './data.js';
 import { FOOD_ORACLES } from './data.js';
 import { availableCuisineOptions, cuisinePath, filterMealsByCuisine, normaliseCuisineFields } from './cuisine-catalog.js';
 import { beijingCalendarParts, deriveDivination } from './divination.js';
+import { recommendCanteenPlan, recommendOutingCuisine } from './student-meal-model.js';
 
 export const STORAGE_KEY = 'yi-shi-gua:v1';
 const STORAGE_VERSION = 1;
@@ -219,6 +220,61 @@ export function chooseMeal(context = {}) {
   return { meal: selected.meal, score: selected.score, reason: recommendationReason(selected.meal, { ...safeContext, recent }, relaxed), relaxed };
 }
 
+/** Adapt practical canteen or outing recommendations into a record the existing food log can confirm. */
+export function recommendMealForCasting({ divination, menu, context = {} } = {}) {
+  const safeContext = isRecord(context) ? context : {};
+  const primary = primaryTrigramNames(divination, safeContext.primary);
+  const request = {
+    ...safeContext,
+    primary,
+    upper: primary.upper,
+    lower: primary.lower,
+    recentRecords: normaliseRecent(safeContext.recentRecords ?? safeContext.recent),
+  };
+
+  if (safeContext.place === '校外') {
+    const recommendation = recommendOutingCuisine(Array.isArray(menu) ? menu : [], request);
+    if (!recommendation.cuisine) return { meal: null, reason: recommendation.reason, recommendation };
+    const meal = castingMealRecord({
+      id: `outing:${recommendation.cuisineZone}:${recommendation.cuisine}`,
+      title: recommendation.cuisineLabel,
+      source: '校外',
+      venue: recommendation.cuisinePath,
+      meals: [castingMealPeriod(safeContext.mealPeriod)],
+      mealPeriod: castingMealPeriod(safeContext.mealPeriod),
+      reason: recommendationReasonText(recommendation),
+      recommendation,
+      recommendationType: 'outing-cuisine',
+      historyDetails: {
+        cuisineZone: recommendation.cuisineZone,
+        cuisine: recommendation.cuisine,
+        dishType: recommendation.dishSuggestions[0],
+      },
+    });
+    return { meal, reason: meal.reason, recommendation };
+  }
+
+  const recommendation = recommendCanteenPlan(request);
+  if (!recommendation?.plan) {
+    const reason = '当前没有可推荐的食堂餐型，请调整餐别后再试。';
+    return { meal: null, reason, recommendation: null };
+  }
+  const plan = recommendation.plan;
+  const meal = castingMealRecord({
+    id: plan.id,
+    title: plan.name,
+    source: '食堂',
+    venue: plan.venue,
+    meals: plan.meals,
+    mealPeriod: castingMealPeriod(safeContext.mealPeriod),
+    reason: recommendationReasonText(recommendation),
+    recommendation,
+    recommendationType: 'universal-canteen-plan',
+    historyDetails: { mealId: plan.id },
+  });
+  return { meal, reason: meal.reason, recommendation };
+}
+
 /** Return one of the fixed 64 entertainment-only food-oracle records. */
 export function oracleFor(seed, dateKey = '', mealPeriod = '') {
   const numericSeed = Number.parseInt(seed, 10);
@@ -295,6 +351,43 @@ function recommendationReason(meal, context, relaxed) {
   if (recent.slice(0, 2).some((record) => record.protein === meal.protein)) notes.push('尽量避开近期同类蛋白');
   if (notes.length === 0) notes.push('餐别与地点匹配，并保留日常变化'); if (relaxed) notes.push('可选项均与近餐相近，已放宽避重条件');
   return `${meal.name}：${notes.join('；')}。`;
+}
+function primaryTrigramNames(divination, fallback) {
+  const source = isRecord(divination) ? divination : {};
+  const fallbackPrimary = isRecord(fallback) ? fallback : {};
+  return {
+    upper: typeof source.upper?.name === 'string' ? source.upper.name : fallbackPrimary.upper,
+    lower: typeof source.lower?.name === 'string' ? source.lower.name : fallbackPrimary.lower,
+  };
+}
+function castingMealPeriod(value) { return MEAL_PERIODS.has(value) ? value : '午餐'; }
+function recommendationReasonText(recommendation) {
+  if (hasText(recommendation?.reason)) return recommendation.reason;
+  const reasons = Array.isArray(recommendation?.reasons) ? recommendation.reasons : [];
+  const text = reasons.map((item) => item?.text).filter(hasText).join('；');
+  return text || '按当前餐别、地点与菜单范围提供一项日常建议。';
+}
+function castingMealRecord({ id, title, source, venue, meals, mealPeriod, reason, recommendation, recommendationType, historyDetails = {} }) {
+  const name = hasText(title) ? title : '餐食推荐';
+  const validMeals = [...new Set((Array.isArray(meals) ? meals : []).filter((period) => MEAL_PERIODS.has(period)))];
+  return {
+    id,
+    name,
+    title: name,
+    source,
+    venue: hasText(venue) ? venue : '待确认地点',
+    meals: validMeals.length ? validMeals : ['午餐'],
+    mealPeriod: castingMealPeriod(mealPeriod),
+    staple: '米饭',
+    protein: '无明确蛋白',
+    vegetable: '有',
+    flavor: '普通',
+    enabled: true,
+    ...historyDetails,
+    metadata: { recommendationType, recommendationId: id },
+    reason,
+    recommendation,
+  };
 }
 
 if (typeof document !== 'undefined') initialiseCastingInterface();
@@ -375,12 +468,17 @@ function initialiseCastingInterface() {
       return;
     }
     if (isRetry && state.selected) state.rejectedIds.push(state.selected.id);
+    const primaryTrigrams = { upper: divination.upper.name, lower: divination.lower.name };
     const context = { dateKey: date, mealPeriod, place, weather };
     const seed = divinationSeed(divination, context);
     const history = normaliseRecordsByDate(state.recordsByDate).history;
-    const recommendation = chooseMeal({ meals: state.menu, ...context, rejectedIds: state.rejectedIds, seed, recent: history });
-    if (!recommendation.meal) { state.rejectedIds = []; announce(recommendation.reason); return; }
-    state.selected = { ...recommendation.meal, meals: [...recommendation.meal.meals], mealPeriod, reason: recommendation.reason };
+    const castingRecommendation = recommendMealForCasting({
+      divination,
+      menu: state.menu,
+      context: { ...context, seed, primary: primaryTrigrams, recentRecords: history },
+    });
+    if (!castingRecommendation.meal) { state.rejectedIds = []; announce(castingRecommendation.reason); return; }
+    state.selected = { ...castingRecommendation.meal, meals: [...castingRecommendation.meal.meals], reason: castingRecommendation.reason };
     const reveal = () => showResult(divination, state.selected, reportNumber);
     if (prefersReducedMotion()) { reveal(); return; }
     startCasting();
