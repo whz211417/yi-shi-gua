@@ -150,7 +150,7 @@ test('starter menu offers 70+ varied editable choices across key meal situations
   assert.ok(STARTER_MEALS.some((meal) => meal.staple === '粥类' && meal.meals.includes('晚餐')), 'missing porridge dinner');
   assert.equal(new Set(STARTER_MEALS.map((meal) => meal.id)).size, STARTER_MEALS.length, 'starter meal ids must be unique');
   assert.equal(new Set(STARTER_MEALS.map((meal) => meal.name)).size, STARTER_MEALS.length, 'starter meal names must be unique');
-  const validSources = new Set(['食堂', '校外']);
+  const validSources = new Set(['食堂', '校外', '待确认']);
   const validPeriods = new Set(['早餐', '午餐', '晚餐']);
   const validStaples = new Set(['米饭', '粉类', '面食', '粥类']);
   const validProteins = new Set(['鸡肉', '牛肉', '猪肉', '鱼虾', '蛋类', '豆制品', '无明确蛋白']);
@@ -183,7 +183,7 @@ test('layered meal template catalog supplies valid Chinese and world cuisine cov
   assert.equal(new Set(MEAL_TEMPLATES.map(({ id }) => id)).size, MEAL_TEMPLATES.length, 'template ids must be unique');
   assert.equal(new Set(MEAL_TEMPLATES.map(({ name }) => name)).size, MEAL_TEMPLATES.length, 'template names must be unique');
 
-  const validSources = new Set(['食堂', '校外']);
+  const validSources = new Set(['食堂', '校外', '待确认']);
   const validPeriods = new Set(['早餐', '午餐', '晚餐']);
   const validStaples = new Set(['米饭', '粉类', '面食', '粥类']);
   const validProteins = new Set(['鸡肉', '牛肉', '猪肉', '鱼虾', '蛋类', '豆制品', '无明确蛋白']);
@@ -218,11 +218,10 @@ test('layered meal template catalog supplies valid Chinese and world cuisine cov
     assert.ok(worldTemplates.some((template) => template.cuisine === cuisine), `missing world cuisine ${cuisine}`);
   }
   for (const mealPeriod of ['早餐', '午餐', '晚餐']) assert.ok(chineseTemplates.some(({ meals }) => meals.includes(mealPeriod)), `missing Chinese ${mealPeriod}`);
-  for (const source of ['食堂', '校外']) assert.ok(chineseTemplates.some((template) => template.source === source), `missing Chinese ${source} template`);
+  assert.ok(chineseTemplates.every((template) => template.source === '待确认' && template.availability === '待确认'), 'templates must not claim campus or off-campus availability before user confirmation');
   for (const staple of ['米饭', '粉类', '面食', '粥类']) assert.ok(chineseTemplates.some((template) => template.staple === staple), `missing Chinese ${staple} template`);
   for (const flavor of ['汤类', '油炸']) assert.ok(chineseTemplates.some((template) => template.flavor === flavor), `missing Chinese ${flavor} template`);
-  assert.ok(chineseTemplates.some((template) => template.venue === '校园食堂模板'), 'missing food-hall template');
-  assert.ok(chineseTemplates.some((template) => template.venue === '校外模板'), 'missing off-campus template');
+  assert.ok(MEAL_TEMPLATES.every((template) => template.venue === '待确认模板'), 'templates must make unconfirmed availability visible');
   const chineseNames = chineseTemplates.map(({ name }) => name).join(' / ');
   for (const [label, pattern] of [
     ['dumpling or bun', /饺|包/],
