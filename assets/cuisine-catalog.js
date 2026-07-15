@@ -102,25 +102,29 @@ function cloneValue(value, seen = new Map()) {
 }
 
 function normaliseText(value) {
-  return typeof value === 'string' ? value.trim() : '';
+  return typeof value === 'string' ? value.normalize('NFC').trim() : '';
+}
+
+function suppliedPath(meal) {
+  return Object.fromEntries(PATH_KEYS.map((key) => [key, normaliseText(meal[key])]));
+}
+
+function isCompletePath(path) {
+  return PATH_KEYS.every((key) => Boolean(path[key]));
+}
+
+function isCustomPath(path) {
+  return isCompletePath(path) && (
+    !Object.hasOwn(DEFAULT_CUISINE_TAXONOMY, path.cuisineZone)
+    || PATH_KEYS.some((key) => path[key] === '自定义')
+  );
 }
 
 function matchingPath(meal) {
-  const supplied = Object.fromEntries(PATH_KEYS.map((key) => [key, normaliseText(meal[key])]));
-  let best = null;
-  let bestScore = 0;
-  for (const path of TAXONOMY_PATHS) {
-    let score = 0;
-    if (supplied.cuisineZone && supplied.cuisineZone === path.cuisineZone) score += 1;
-    if (supplied.cuisine && supplied.cuisine === path.cuisine) score += 2;
-    if (supplied.courseFamily && supplied.courseFamily === path.courseFamily) score += 4;
-    if (supplied.dishType && supplied.dishType === path.dishType) score += 8;
-    if (score > bestScore) {
-      best = path;
-      bestScore = score;
-    }
-  }
-  return best || FALLBACK_TAXONOMY;
+  const supplied = suppliedPath(meal);
+  if (!isCompletePath(supplied)) return FALLBACK_TAXONOMY;
+  if (isCustomPath(supplied)) return supplied;
+  return TAXONOMY_PATHS.find((path) => PATH_KEYS.every((key) => path[key] === supplied[key])) || FALLBACK_TAXONOMY;
 }
 
 /** Return a deep-cloned meal with one coherent, valid cuisine path. */

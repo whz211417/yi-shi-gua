@@ -211,11 +211,23 @@ test('cuisine taxonomy retains a valid Chinese meal path', () => {
   assert.equal(cuisinePath(mealWithCuisine), '中国菜 / 川菜 / 热菜 / 宫保鸡丁');
 });
 
+test('cuisine taxonomy falls back for partial catalog paths but preserves full custom paths', () => {
+  const partial = normaliseCuisineFields(meal('partial', { cuisineZone: '中国菜' }));
+  assert.deepEqual(
+    { cuisineZone: partial.cuisineZone, cuisine: partial.cuisine, courseFamily: partial.courseFamily, dishType: partial.dishType },
+    FALLBACK_TAXONOMY,
+  );
+  const customInput = meal('custom-path', {
+    cuisineZone: '自定义范围', cuisine: '我的菜系', courseFamily: '我的大类', dishType: '我的餐品',
+  });
+  assert.deepEqual(normaliseCuisineFields(customInput), customInput);
+});
+
 test('cuisine filters compose zone, cuisine, family, enabled state, and text search', () => {
   const meals = [
     meal('gongbao', { name: '宫保鸡丁', cuisineZone: '中国菜', cuisine: '川菜', courseFamily: '热菜', dishType: '宫保鸡丁' }),
     meal('mapo-disabled', { name: '麻婆豆腐', enabled: false, cuisineZone: '中国菜', cuisine: '川菜', courseFamily: '热菜', dishType: '麻婆豆腐' }),
-    meal('sushi', { name: '东瀛午餐', cuisineZone: '东亚料理', cuisine: '日料', courseFamily: '主食', dishType: '寿司' }),
+    meal('sushi', { name: '东瀛午餐', cuisineZone: '东亚料理', cuisine: '日料', courseFamily: '刺身寿司', dishType: '寿司' }),
   ];
 
   assert.deepEqual(
@@ -229,13 +241,17 @@ test('cuisine filters compose zone, cuisine, family, enabled state, and text sea
     ['gongbao'],
   );
   assert.deepEqual(filterMealsByCuisine(meals, { query: '寿司' }).map((item) => item.id), ['sushi']);
+  const unicodeMeal = meal('unicode', {
+    name: 'Cafe\u0301 午餐', cuisineZone: '跨地域', cuisine: '咖啡烘焙', courseFamily: '咖啡', dishType: '拿铁',
+  });
+  assert.deepEqual(filterMealsByCuisine([unicodeMeal], { query: 'Café' }).map((item) => item.id), ['unicode']);
 });
 
 test('cuisine options contain only actual normalised choices and respect upstream filters', () => {
   const meals = [
     meal('legacy'),
     meal('gongbao', { cuisineZone: '中国菜', cuisine: '川菜', courseFamily: '热菜', dishType: '宫保鸡丁' }),
-    meal('sushi', { cuisineZone: '东亚料理', cuisine: '日料', courseFamily: '主食', dishType: '寿司' }),
+    meal('sushi', { cuisineZone: '东亚料理', cuisine: '日料', courseFamily: '刺身寿司', dishType: '寿司' }),
   ];
 
   assert.deepEqual(availableCuisineOptions(meals, { zone: '中国菜' }), {
