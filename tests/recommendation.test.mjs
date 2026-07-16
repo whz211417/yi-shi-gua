@@ -545,6 +545,31 @@ test('ink seal ritual decorative layers are isolated from result text', () => {
   }
 });
 
+test('ink seal ritual CSS stages the restrained casting sequence accessibly', () => {
+  const css = readFileSync(new URL('../assets/style.css', import.meta.url), 'utf8');
+
+  for (const phase of ['count', 'ink', 'seal', 'lines', 'reveal']) {
+    assert.match(css, new RegExp(`data-cast-phase=\\"${phase}\\"`), `missing ${phase} casting phase`);
+  }
+  for (const selector of [
+    '.casting-ritual',
+    '.ritual-border-outer',
+    '.ritual-border-inner',
+    '.trigram-inscription-ring',
+    '.calendar-time-inscription',
+    '.vermilion-food-seal',
+  ]) {
+    assert.match(css, new RegExp(`\\${selector.replace('.', '.')}\\s*\\{`), `missing ${selector} styling`);
+  }
+  for (const keyframe of ['ink-ring-resolve', 'seal-imprint', 'yao-write', 'result-emerge']) {
+    assert.match(css, new RegExp(`@keyframes\\s+${keyframe}\\s*\\{`), `missing ${keyframe} keyframe`);
+  }
+  assert.match(css, /@media \(max-width: 699px\)[\s\S]*\.casting-ritual/);
+  assert.match(css, /@media \(max-width: 375px\)[\s\S]*\.casting-ritual/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.casting-ritual[\s\S]*animation:\s*none\s*!important/);
+  assert.doesNotMatch(css, /animation-iteration-count\s*:\s*infinite|rotate[XYZ]\(|rotate3d\(|perspective:|\bfire\b|\blightning\b|\bspinner\b|0 0 30px/i);
+});
+
 test('compact menu rows open a focused on-demand editor instead of inline forms', () => {
   const app = readFileSync(new URL('../assets/app.js', import.meta.url), 'utf8');
 
