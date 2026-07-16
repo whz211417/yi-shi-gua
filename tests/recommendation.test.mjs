@@ -41,6 +41,7 @@ import {
   loadStoredState,
   newMeal,
   normaliseMenu,
+  normaliseMealRelations,
   normaliseRecordsByDate,
   oracleFor,
   oracleForContext,
@@ -1305,6 +1306,50 @@ test('todayKey formats a local date as an ISO-like day key', () => {
   assert.equal(todayKey(new Date(2026, 6, 13)), '2026-07-13');
 });
 
+test('meal relations normalise independently to the three local relation states', () => {
+  const source = {
+    ' 热汤面 ': ' frequent ',
+    '豆腐饭': 'tried',
+    '寿司': 'wish',
+    '无效状态': 'often',
+    '': 'frequent',
+    '   ': 'wish',
+  };
+  const normalised = normaliseMealRelations(source);
+
+  assert.deepEqual(normaliseMealRelations(), {}, 'missing relation data leaves every meal unmarked');
+  assert.deepEqual(normalised, { 热汤面: 'frequent', 豆腐饭: 'tried', 寿司: 'wish' });
+  normalised.热汤面 = 'wish';
+  assert.equal(source[' 热汤面 '], ' frequent ', 'normalisation must not mutate persisted input');
+});
+
+test('meal relation persistence migrates legacy local state and round-trips without changing menu records', () => {
+  const storage = memoryStorage();
+  const legacyState = {
+    version: 1,
+    catalogVersion: 1,
+    menu: [meal('custom', { name: '自定义轻食' })],
+    recordsByDate: { '2026-07-13': [record('lunch', '午餐', '2026-07-13', 200)] },
+  };
+  storage.setItem('yi-shi-gua:v1', JSON.stringify(legacyState));
+
+  assert.deepEqual(loadStoredState(storage), {
+    menu: normaliseMenu(legacyState.menu),
+    recordsByDate: legacyState.recordsByDate,
+    mealRelations: {},
+  });
+  assert.deepEqual(JSON.parse(storage.getItem('yi-shi-gua:v1')).mealRelations, {}, 'the legacy payload is upgraded in place');
+
+  const state = {
+    menu: legacyState.menu,
+    recordsByDate: legacyState.recordsByDate,
+    mealRelations: { custom: 'frequent', 已吃的餐: 'tried', 想吃的餐: 'wish', invalid: 'unknown' },
+  };
+  assert.equal(saveStoredState(storage, state), true);
+  assert.deepEqual(loadStoredState(storage).mealRelations, { custom: 'frequent', 已吃的餐: 'tried', 想吃的餐: 'wish' });
+  assert.deepEqual(loadStoredState(storage).recordsByDate, legacyState.recordsByDate, 'meal relations cannot alter confirmed records');
+});
+
 test('persistence restores a valid editable menu and newest-first confirmed records', () => {
   const storage = memoryStorage();
   const state = {
@@ -1313,9 +1358,10 @@ test('persistence restores a valid editable menu and newest-first confirmed reco
       '2026-07-12': [record('earlier', '早餐', '2026-07-12', 100)],
       '2026-07-13': [record('latest', '午餐', '2026-07-13', 200)],
     },
+    mealRelations: {},
   };
   assert.equal(saveStoredState(storage, state), true);
-  assert.deepEqual(loadStoredState(storage), { menu: normaliseMenu(state.menu), recordsByDate: state.recordsByDate });
+  assert.deepEqual(loadStoredState(storage), { menu: normaliseMenu(state.menu), recordsByDate: state.recordsByDate, mealRelations: {} });
   assert.deepEqual(normaliseRecordsByDate(state.recordsByDate).history.map((item) => item.id), ['latest', 'earlier']);
 });
 
@@ -1397,15 +1443,15 @@ test('menu normalisation and local storage round-trip preserve full custom taxon
 test('persistence safely falls back for broken JSON, bad schema, bad records, and unavailable storage', () => {
   const storage = memoryStorage();
   storage.setItem('yi-shi-gua:v1', '{broken');
-  assert.deepEqual(loadStoredState(storage), { menu: STARTER_MEALS, recordsByDate: {} });
+  assert.deepEqual(loadStoredState(storage), { menu: STARTER_MEALS, recordsByDate: {}, mealRelations: {} });
   assert.equal(storage.getItem('yi-shi-gua:v1'), '{broken', 'malformed state must remain untouched');
   assert.equal(storage.writes, 1, 'malformed state must not be rewritten during fallback');
 
   storage.setItem('yi-shi-gua:v1', JSON.stringify({ version: 1, menu: [meal('ok')], recordsByDate: { nope: [record('bad', '宵夜', 'nope')] } }));
-  assert.deepEqual(loadStoredState(storage), { menu: STARTER_MEALS, recordsByDate: {} });
+  assert.deepEqual(loadStoredState(storage), { menu: STARTER_MEALS, recordsByDate: {}, mealRelations: {} });
 
   const unavailable = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); } };
-  assert.deepEqual(loadStoredState(unavailable), { menu: STARTER_MEALS, recordsByDate: {} });
+  assert.deepEqual(loadStoredState(unavailable), { menu: STARTER_MEALS, recordsByDate: {}, mealRelations: {} });
   assert.equal(saveStoredState(unavailable, { menu: [meal('ok')], recordsByDate: {} }), false);
   assert.equal(saveStoredState(null, { menu: [meal('ok')], recordsByDate: {} }), false);
 });

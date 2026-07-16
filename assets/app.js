@@ -7,6 +7,7 @@ import { recommendCanteenPlan, recommendOutingCuisine } from './student-meal-mod
 export const STORAGE_KEY = 'yi-shi-gua:v1';
 const STORAGE_VERSION = 1;
 export const CATALOG_VERSION = 1;
+export const MEAL_RELATIONS = Object.freeze(['frequent', 'tried', 'wish']);
 const REQUIRED_MEAL_FIELDS = ['id', 'name', 'source', 'venue', 'meals', 'staple', 'protein', 'vegetable', 'flavor', 'enabled'];
 const RECENT_HISTORY_WINDOW = 5;
 const MEAL_PERIODS = new Set(['早餐', '午餐', '晚餐']);
@@ -35,6 +36,7 @@ const VALID_STAPLES = new Set(MENU_OPTIONS.staples);
 const VALID_PROTEINS = new Set(MENU_OPTIONS.proteins);
 const VALID_VEGETABLES = new Set(MENU_OPTIONS.vegetables);
 const VALID_FLAVORS = new Set(MENU_OPTIONS.flavors);
+const VALID_MEAL_RELATIONS = new Set(MEAL_RELATIONS);
 
 /** Create independent, display-only menu filter state. */
 export function initialMenuFilters() {
@@ -122,6 +124,19 @@ export function normaliseRecordsByDate(recordsByDate) {
   return { recordsByDate: normalised, history, valid: true };
 }
 
+/** Clone valid local meal relation flags; omitted or malformed flags leave a meal unmarked. */
+export function normaliseMealRelations(mealRelations) {
+  if (!isRecord(mealRelations)) return {};
+  const normalised = {};
+  for (const [rawMealId, rawRelation] of Object.entries(mealRelations)) {
+    const mealId = normaliseFilterText(rawMealId);
+    const relation = normaliseFilterText(rawRelation);
+    if (!mealId || !VALID_MEAL_RELATIONS.has(relation)) continue;
+    Object.defineProperty(normalised, mealId, { value: relation, enumerable: true, configurable: true, writable: true });
+  }
+  return normalised;
+}
+
 /** Read versioned local state; malformed/unavailable storage is deliberately non-fatal. */
 export function loadStoredState(storage) {
   try {
@@ -131,11 +146,13 @@ export function loadStoredState(storage) {
     if (!isRecord(parsed) || parsed.version !== STORAGE_VERSION || !isValidMenu(parsed.menu)) return defaultStoredState();
     const records = normaliseRecordsByDate(parsed.recordsByDate);
     if (!records.valid) return defaultStoredState();
+    const mealRelations = normaliseMealRelations(parsed.mealRelations);
     const state = {
       menu: needsCatalogMigration(parsed) ? mergeCatalogTemplates(parsed.menu) : normaliseMenu(parsed.menu),
       recordsByDate: records.recordsByDate,
+      mealRelations,
     };
-    if (needsCatalogMigration(parsed)) persistCatalogMigration(storage, state);
+    if (needsCatalogMigration(parsed) || !Object.hasOwn(parsed, 'mealRelations')) persistCatalogMigration(storage, state);
     return state;
   } catch {
     return defaultStoredState();
@@ -148,7 +165,7 @@ export function saveStoredState(storage, state) {
     if (!storage || typeof storage.setItem !== 'function' || !isRecord(state) || !isValidMenu(state.menu)) return false;
     const records = normaliseRecordsByDate(state.recordsByDate);
     if (!records.valid) return false;
-    storage.setItem(STORAGE_KEY, JSON.stringify(storedStatePayload(normaliseMenu(state.menu), records.recordsByDate)));
+    storage.setItem(STORAGE_KEY, JSON.stringify(storedStatePayload(normaliseMenu(state.menu), records.recordsByDate, normaliseMealRelations(state.mealRelations))));
     return true;
   } catch {
     return false;
@@ -310,16 +327,16 @@ export function dailyBalanceTip(records = []) {
   return '今日均衡提示：已记餐食有蔬菜和变化，按你的食量继续安排就好。';
 }
 
-function defaultStoredState() { return { menu: normaliseMenu(null), recordsByDate: {} }; }
+function defaultStoredState() { return { menu: normaliseMenu(null), recordsByDate: {}, mealRelations: {} }; }
 function needsCatalogMigration(state) { return !Number.isInteger(state.catalogVersion) || state.catalogVersion < CATALOG_VERSION; }
 function mergeCatalogTemplates(menu) {
   const existingIds = new Set(menu.map((meal) => meal.id));
   return normaliseMenu([...menu, ...STARTER_MEALS.filter((meal) => !existingIds.has(meal.id))]);
 }
-function storedStatePayload(menu, recordsByDate) { return { version: STORAGE_VERSION, catalogVersion: CATALOG_VERSION, menu, recordsByDate }; }
+function storedStatePayload(menu, recordsByDate, mealRelations = {}) { return { version: STORAGE_VERSION, catalogVersion: CATALOG_VERSION, menu, recordsByDate, mealRelations }; }
 function persistCatalogMigration(storage, state) {
   try {
-    if (storage && typeof storage.setItem === 'function') storage.setItem(STORAGE_KEY, JSON.stringify(storedStatePayload(state.menu, state.recordsByDate)));
+    if (storage && typeof storage.setItem === 'function') storage.setItem(STORAGE_KEY, JSON.stringify(storedStatePayload(state.menu, state.recordsByDate, state.mealRelations)));
   } catch { /* Migration remains available for this session when local storage cannot be written. */ }
 }
 function isValidMenu(menu) { return Array.isArray(menu) && menu.length > 0 && menu.every(isUsableMeal) && hasUniqueIds(menu); }
@@ -418,7 +435,7 @@ function initialiseCastingInterface() {
   const menuZoneInputs = menuFilterZone ? [...menuFilterZone.querySelectorAll('input[name="menu-zone"]')] : [];
   if (![numberInput, randomButton, castButton, retryButton, confirmButton, resultCard, resultEmpty, resultContent, liveRegion, dateStamp, calendarStatus, balanceTip, menuOpenButton, menuCloseButton, menuPanel, menuList, mealDetailsTrigger, mealEditorPanel, addMealButton, resetMenuButton].every(Boolean)) return;
   const today = new Date(); const date = todayKey(today); const saved = loadStoredState(safeStorage());
-  const state = { menu: saved.menu, recordsByDate: saved.recordsByDate, rejectedIds: [], selected: null };
+  const state = { menu: saved.menu, recordsByDate: saved.recordsByDate, mealRelations: saved.mealRelations, rejectedIds: [], selected: null };
   // The catalog opens in the Chinese-cuisine scope; world entries are never mixed into this first directory view.
   let menuFilters = { ...initialMenuFilters(), zone: '中国菜' };
   let selectedMenuMealId = null;
