@@ -6,11 +6,14 @@ import { STARTER_MEALS, FOOD_ORACLES } from '../assets/data.js';
 import { MEAL_TEMPLATES } from '../assets/meal-templates.js';
 import {
   CANTEEN_PLANS,
+  DAILY_STATE_OPTIONS,
   WEATHER_OPTIONS,
   dietaryTendencyForTrigrams,
+  normaliseDailyStates,
   normaliseStudentWeather,
   recommendCanteenPlan,
   recommendOutingCuisine,
+  scoreDailyStatePreferences,
   scoreStudentPlan,
 } from '../assets/student-meal-model.js';
 import {
@@ -48,6 +51,42 @@ import {
   scoreMeal,
   todayKey,
 } from '../assets/app.js';
+
+test('optional daily states normalise safely and add only soft recommendation preferences', () => {
+  assert.deepEqual(DAILY_STATE_OPTIONS, {
+    budget: ['省钱', '正常', '想改善'],
+    time: ['赶时间', '正常', '可以慢慢吃'],
+    fullness: ['想吃饱', '正常', '想清淡'],
+    mood: ['不限', '想热乎', '想重口', '想吃点好的'],
+  });
+  assert.deepEqual(normaliseDailyStates(), { budget: '正常', time: '正常', fullness: '正常', mood: '不限' });
+  assert.deepEqual(
+    normaliseDailyStates({ budget: ' 省钱 ', time: '无效', fullness: '想清淡', mood: '想热乎' }),
+    { budget: '省钱', time: '正常', fullness: '想清淡', mood: '想热乎' },
+  );
+
+  const matching = scoreDailyStatePreferences(
+    { name: '自选快餐：热汤面配米饭', category: '自选快餐', window: '自选快餐窗口' },
+    { budget: '省钱', time: '赶时间', fullness: '想吃饱', mood: '想热乎' },
+  );
+  assert.equal(matching.score, 8, 'each matching daily state has only a small additive weight');
+  assert.deepEqual(matching.influences.map(({ field, value }) => [field, value]), [
+    ['budget', '省钱'],
+    ['time', '赶时间'],
+    ['fullness', '想吃饱'],
+    ['mood', '想热乎'],
+  ]);
+  assert.deepEqual(scoreDailyStatePreferences({ name: '任意餐型' }), { score: 0, influences: [] });
+
+  const lunchPlans = CANTEEN_PLANS.filter((plan) => plan.meals.includes('午餐'));
+  for (const dailyState of [
+    { budget: '省钱' }, { budget: '想改善' }, { time: '赶时间' }, { time: '可以慢慢吃' },
+    { fullness: '想吃饱' }, { fullness: '想清淡' }, { mood: '想热乎' }, { mood: '想重口' }, { mood: '想吃点好的' },
+  ]) {
+    const scored = lunchPlans.map((plan) => scoreStudentPlan(plan, { mealPeriod: '午餐', weather: '晴暖', dailyState }));
+    assert.ok(scored.every(({ eligible, score }) => eligible && Number.isFinite(score)), `${JSON.stringify(dailyState)} cannot remove a valid plan`);
+  }
+});
 
 test('canteen plans expose the six-weather vocabulary and normalise legacy weather values', () => {
   assert.deepEqual(WEATHER_OPTIONS, ['晴热', '晴暖', '阴凉', '雨天', '风大', '寒冷/雨雪']);
@@ -155,6 +194,39 @@ test('canteen recommendation is deterministic, practical, and explains its limit
   assert.equal(first.isEntertainment, true);
   assert.equal(first.isUniversalTemplate, true);
   assert.notEqual(first.plan.id, 'universal-hot-soup-meal', 'a newest recent repeat receives a soft penalty when alternatives exist');
+});
+
+test('daily-state weights are surfaced in canteen and outing explanations without narrowing eligibility', () => {
+  const canteen = recommendCanteenPlan({
+    mealPeriod: '午餐',
+    weather: '晴暖',
+    seed: 'daily-state-canteen',
+    dailyState: { time: '赶时间', fullness: '想吃饱' },
+  });
+  const canteenStateReason = canteen.reasons.find(({ label }) => label === '今日状态');
+  assert.ok(canteenStateReason, 'a selected canteen plan explains the states that added weight');
+  assert.match(canteenStateReason.text, /时间「赶时间」/);
+  assert.match(canteenStateReason.text, /饱腹「想吃饱」/);
+  assert.ok(CANTEEN_PLANS.filter((plan) => plan.meals.includes('午餐')).every((plan) => (
+    scoreStudentPlan(plan, { mealPeriod: '午餐', weather: '晴暖', dailyState: { time: '赶时间', fullness: '想吃饱' } }).eligible
+  )));
+
+  const outing = recommendOutingCuisine({
+    weather: '晴暖',
+    seed: 'daily-state-outing',
+    dailyState: { time: '赶时间' },
+    menu: [
+      meal('quick-rice', { enabled: true, cuisineZone: '中国菜', cuisine: '快餐', courseFamily: '主食', dishType: '盖饭' }),
+      meal('quick-noodles', { enabled: true, cuisineZone: '中国菜', cuisine: '快餐', courseFamily: '主食', dishType: '炒面' }),
+      meal('slow-hotpot', { enabled: true, cuisineZone: '中国菜', cuisine: '慢食', courseFamily: '锅物', dishType: '麻辣烫' }),
+      meal('slow-claypot', { enabled: true, cuisineZone: '中国菜', cuisine: '慢食', courseFamily: '锅物', dishType: '煲仔饭' }),
+    ],
+  });
+  assert.equal(outing.cuisine, '快餐', 'a small quick-meal preference can break an otherwise neutral cuisine tie');
+  const outingStateReason = outing.reasons.find(({ label }) => label === '今日状态');
+  assert.ok(outingStateReason, 'the outing result explains its applicable daily state');
+  assert.match(outingStateReason.text, /时间「赶时间」/);
+  assert.deepEqual(outing.fallbackOptions.map(({ cuisine }) => cuisine), ['慢食'], 'the nonmatching valid cuisine remains available as a fallback');
 });
 
 test('outing cuisine uses only enabled taxonomy paths and returns concrete dishes deterministically', () => {

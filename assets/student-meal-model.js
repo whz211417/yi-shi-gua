@@ -2,6 +2,83 @@
 // not the availability, price, or vendors of any particular school.
 export const WEATHER_OPTIONS = ['晴热', '晴暖', '阴凉', '雨天', '风大', '寒冷/雨雪'];
 
+// Daily state is deliberately a small, optional preference layer. These values
+// do not describe dietary advice or hard availability constraints.
+export const DAILY_STATE_OPTIONS = Object.freeze({
+  budget: Object.freeze(['省钱', '正常', '想改善']),
+  time: Object.freeze(['赶时间', '正常', '可以慢慢吃']),
+  fullness: Object.freeze(['想吃饱', '正常', '想清淡']),
+  mood: Object.freeze(['不限', '想热乎', '想重口', '想吃点好的']),
+});
+
+const DAILY_STATE_DEFAULTS = Object.freeze({
+  budget: '正常',
+  time: '正常',
+  fullness: '正常',
+  mood: '不限',
+});
+
+const DAILY_STATE_LABELS = Object.freeze({
+  budget: '预算',
+  time: '时间',
+  fullness: '饱腹',
+  mood: '心情',
+});
+
+const DAILY_STATE_PATTERNS = Object.freeze({
+  budget: Object.freeze({
+    省钱: /自选快餐|盖饭|粉面|炒饭|早餐|快餐/,
+    想改善: /家常小炒|铁板|煲仔|炸鸡|汉堡|牛|鱼|虾/,
+  }),
+  time: Object.freeze({
+    赶时间: /自选快餐|盖饭|炒饭|快餐|三明治|汉堡/,
+    可以慢慢吃: /家常小炒|麻辣烫|冒菜|饺子|馄饨|铁板|煲仔|汤饭|火锅/,
+  }),
+  fullness: Object.freeze({
+    想吃饱: /米饭|饭|面|粉|饺|馄饨|主食|盖饭|炒/,
+    想清淡: /轻食|蔬菜|沙拉|清汤|番茄|素/,
+  }),
+  mood: Object.freeze({
+    想热乎: /热|汤|面|粉|粥|锅|煲/,
+    想重口: /麻辣|重口|炸|烤|炒/,
+    想吃点好的: /牛|鱼|虾|铁板|煲仔|小炒|寿司/,
+  }),
+});
+
+/** Returns a complete, safe daily-state record without retaining caller data. */
+export function normaliseDailyStates(dailyState) {
+  const source = dailyState && typeof dailyState === 'object' ? dailyState : {};
+  return Object.fromEntries(Object.entries(DAILY_STATE_DEFAULTS).map(([field, fallback]) => {
+    const value = typeof source[field] === 'string' ? source[field].trim() : '';
+    return [field, DAILY_STATE_OPTIONS[field].includes(value) ? value : fallback];
+  }));
+}
+
+function dailyStateSearchText(item) {
+  if (!item || typeof item !== 'object') return '';
+  return ['name', 'category', 'window', 'cuisineZone', 'cuisine', 'courseFamily', 'dishType']
+    .map((field) => typeof item[field] === 'string' ? item[field] : '')
+    .join(' ');
+}
+
+/**
+ * Applies small additive daily-state preferences to a menu item. A non-match
+ * always scores zero, so daily state can never remove an otherwise valid item.
+ */
+export function scoreDailyStatePreferences(item, dailyState) {
+  const states = normaliseDailyStates(dailyState);
+  const text = dailyStateSearchText(item);
+  const influences = Object.entries(states).flatMap(([field, value]) => {
+    const pattern = DAILY_STATE_PATTERNS[field][value];
+    return pattern?.test(text) ? [{ field, value, label: DAILY_STATE_LABELS[field], score: 2 }] : [];
+  });
+  return { score: influences.reduce((total, influence) => total + influence.score, 0), influences };
+}
+
+function dailyStateReasonText(influences) {
+  return influences.map(({ field, value }) => `${DAILY_STATE_LABELS[field]}「${value}」`).join('；');
+}
+
 const LEGACY_WEATHER_MAP = new Map([
   ['自动以本地日期推演', '晴暖'],
   ['不考虑', '晴暖'],
@@ -107,17 +184,20 @@ export function scoreStudentPlan(plan, context = {}) {
   const weatherScore = Array.isArray(plan.weatherTags) && plan.weatherTags.includes(weather) ? 6 : 0;
   const trigramMatches = [upper, lower].filter((trigram) => Array.isArray(plan.trigramTags) && plan.trigramTags.includes(trigram)).length;
   const trigramScore = trigramMatches * 4;
+  const dailyStatePreference = scoreDailyStatePreferences(plan, context.dailyState);
   const recentRepeatIndex = recentRecords.findIndex((record) => record.id === plan.id || record.name === plan.name);
   const recentRepeatPenalty = recentRepeatIndex === -1 ? 0 : 10 - recentRepeatIndex;
   const tieBreaker = stableSeedValue(context.seed, plan.id);
 
   return {
     eligible: mealScore > 0,
-    score: mealScore + weatherScore + trigramScore - recentRepeatPenalty + tieBreaker,
+    score: mealScore + weatherScore + trigramScore + dailyStatePreference.score - recentRepeatPenalty + tieBreaker,
     breakdown: {
       mealScore,
       weatherScore,
       trigramScore,
+      dailyStateScore: dailyStatePreference.score,
+      dailyStateInfluences: dailyStatePreference.influences,
       recentRepeatPenalty,
       tieBreaker,
     },
@@ -148,6 +228,7 @@ export function recommendCanteenPlan(context = {}) {
   const weatherText = plan.weatherTags.includes(weather)
     ? `${weather}时此餐型更贴合通用口味偏好`
     : `${weather}仅作轻度排序，不排除这份完整餐`;
+  const dailyStateText = dailyStateReasonText(selected.breakdown.dailyStateInfluences);
 
   return {
     plan,
@@ -159,6 +240,7 @@ export function recommendCanteenPlan(context = {}) {
     reasons: [
       { label: '卦象取向', text: tendencyText },
       { label: '现实修正', text: `${weatherText}；${mealPeriod}仅保留可作为完整一餐的通用方案，并避开最近的软重复。` },
+      ...(dailyStateText ? [{ label: '今日状态', text: `${dailyStateText}为这份餐型增加了轻度排序权重，不排除其他完整餐型。` }] : []),
       { label: '落地替代', text: `若${plan.window}当日无供应，可改选${fallbackPlans.map((fallbackPlan) => fallbackPlan.name).join('或')}，并按实际窗口调整。` },
     ],
     disclaimer: '娱乐性饮食提示：这是通用食堂模板，不代表实际食堂当日供应，请以现场窗口和个人情况为准。',
@@ -229,7 +311,11 @@ function outingDishScore(dish, context) {
   const repeatPenalty = recentRecords.some((record) => record?.dishType === dish.dishType)
     ? 6
     : (recentRecords.some((record) => record?.cuisine === dish.cuisine && record?.cuisineZone === dish.cuisineZone) ? 3 : 0);
-  return trigramScore + weatherScore - repeatPenalty;
+  const dailyStatePreference = scoreDailyStatePreferences(dish, context.dailyState);
+  return {
+    score: trigramScore + weatherScore + dailyStatePreference.score - repeatPenalty,
+    dailyStateInfluences: dailyStatePreference.influences,
+  };
 }
 
 function groupedOutingCuisines(menu, context) {
@@ -254,14 +340,22 @@ function groupedOutingCuisines(menu, context) {
       const dishes = [...group.paths.values()];
       const dishTypes = [...new Set(dishes.map(({ dishType }) => dishType))];
       const scoredDishes = dishes
-        .map((dish) => ({ dish, score: outingDishScore(dish, context), tieBreaker: stableSeedValue(context.seed, dish.id) }))
+        .map((dish) => {
+          const { score, dailyStateInfluences } = outingDishScore(dish, context);
+          return { dish, score, dailyStateInfluences, tieBreaker: stableSeedValue(context.seed, dish.id) };
+        })
         .sort((left, right) => right.score - left.score || right.tieBreaker - left.tieBreaker || left.dish.id.localeCompare(right.dish.id));
       const score = scoredDishes.reduce((total, item) => total + item.score, 0) / scoredDishes.length;
+      const dailyStateInfluences = scoredDishes.flatMap((item) => item.dailyStateInfluences)
+        .filter((influence, index, influences) => (
+          influences.findIndex(({ field, value }) => field === influence.field && value === influence.value) === index
+        ));
       return {
         ...group,
         dishTypes,
         scoredDishes,
         score,
+        dailyStateInfluences,
         tieBreaker: stableSeedValue(context.seed, group.cuisineKey),
       };
     })
@@ -328,6 +422,7 @@ export function recommendOutingCuisine(menuOrContext = {}, additionalContext = {
     ? tendencies.map(({ trigram, tendency }) => `${trigram}卦偏向${tendency}`).join('；')
     : '未提供有效上下卦，按已启用菜系的通用排序推荐。';
   const weatherText = OUTING_WEATHER_PATTERNS[weather] ? `${weather}仅作为对菜品名称与分类的轻度排序，不排除其他已启用菜系。` : '天气仅作为轻度排序。';
+  const dailyStateText = dailyStateReasonText(selected.dailyStateInfluences);
 
   return {
     ...summary,
@@ -339,6 +434,7 @@ export function recommendOutingCuisine(menuOrContext = {}, additionalContext = {
     reasons: [
       { label: '卦象取向', text: tendencyText },
       { label: '天气倾向', text: weatherText },
+      ...(dailyStateText ? [{ label: '今日状态', text: `${dailyStateText}为这组菜品增加了轻度排序权重，不排除其他已启用菜系。` }] : []),
       { label: '菜单范围', text: `仅从当前菜单中已启用的完整分类路径选择；${summary.cuisineLabel}作为外出菜系呈现。` },
     ],
     disclaimer: OUTING_AVAILABILITY_DISCLAIMER,
