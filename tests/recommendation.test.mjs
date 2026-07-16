@@ -483,6 +483,43 @@ test('directory menu static contract provides scoped catalog browsing without de
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
 });
 
+test('practical recommendation result contract exposes concrete choices and reality limits', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const panelStart = html.indexOf('<aside id="menu-panel"');
+  const home = html.slice(0, panelStart);
+  const weather = home.slice(home.indexOf('<fieldset id="weather"'), home.indexOf('</fieldset>', home.indexOf('<fieldset id="weather"')));
+
+  const expectedWeather = ['晴热', '晴暖', '阴凉', '雨天', '风大', '寒冷/雨雪'];
+  for (const value of expectedWeather) {
+    assert.match(weather, new RegExp(`<input[^>]*name="weather"[^>]*value="${value}"[^>]*><span>${value}<\\/span>`), `missing ${value} weather radio`);
+  }
+  for (const legacyValue of ['不考虑', '下雨', '偏冷']) assert.doesNotMatch(weather, new RegExp(`value="${legacyValue}"`));
+  assert.doesNotMatch(home, /cuisine-preference|cast-cuisine|home-cuisine-filter|menu-filter-cuisine/);
+
+  for (const [id, label] of [
+    ['result-dish-suggestions', '具体菜建议'],
+    ['result-reality-adjustment', '现实修正'],
+    ['result-fallbacks', '替代方案'],
+    ['result-entertainment-note', '娱乐性饮食提示'],
+  ]) {
+    assert.equal((home.match(new RegExp(`id="${id}"`, 'g')) || []).length, 1, `${id} must be unique on the homepage`);
+    assert.match(home, new RegExp(`${label}[\\s\\S]{0,180}id="${id}"|id="${id}"[\\s\\S]{0,180}${label}`), `${id} must have the ${label} semantic label`);
+  }
+
+  const app = readFileSync(new URL('../assets/app.js', import.meta.url), 'utf8');
+  assert.match(app, /renderPracticalRecommendation\(meal\.recommendation\);/);
+  assert.match(app, /function renderPracticalRecommendation\(recommendation\)/);
+  assert.match(app, /recommendation\.isUniversalTemplate/);
+  assert.match(app, /recommendation\.isOutingCuisine/);
+  assert.match(app, /renderRecommendationList\('result-dish-suggestions'/);
+  assert.match(app, /renderRecommendationList\('result-fallbacks'/);
+
+  const css = readFileSync(new URL('../assets/style.css', import.meta.url), 'utf8');
+  for (const selector of ['.practical-recommendation', '.recommendation-block', '.recommendation-list', '.entertainment-note']) {
+    assert.match(css, new RegExp(`\\${selector.replace('.', '.')}\\s*\\{`), `missing ${selector} styling`);
+  }
+});
+
 test('compact menu rows open a focused on-demand editor instead of inline forms', () => {
   const app = readFileSync(new URL('../assets/app.js', import.meta.url), 'utf8');
 

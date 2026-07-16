@@ -65,10 +65,12 @@
             <legend>天气</legend>
             <div class="segmented-control" role="radiogroup" aria-label="天气">
               <label><input type="radio" name="weather" value="自动以本地日期推演" checked /><span>自动推演</span></label>
-              <label><input type="radio" name="weather" value="不考虑" /><span>不考虑</span></label>
               <label><input type="radio" name="weather" value="晴热" /><span>晴热</span></label>
-              <label><input type="radio" name="weather" value="下雨" /><span>下雨</span></label>
-              <label><input type="radio" name="weather" value="偏冷" /><span>偏冷</span></label>
+              <label><input type="radio" name="weather" value="晴暖" /><span>晴暖</span></label>
+              <label><input type="radio" name="weather" value="阴凉" /><span>阴凉</span></label>
+              <label><input type="radio" name="weather" value="雨天" /><span>雨天</span></label>
+              <label><input type="radio" name="weather" value="风大" /><span>风大</span></label>
+              <label><input type="radio" name="weather" value="寒冷/雨雪" /><span>寒冷/雨雪</span></label>
             </div>
           </fieldset>
         </div>
@@ -133,6 +135,21 @@
           <p id="meal-meta" class="meal-meta"></p>
           <div class="oracle-line"><span aria-hidden="true"></span><p id="oracle-line"></p></div>
           <p id="meal-reason" class="meal-reason"></p>
+          <div class="practical-recommendation" aria-label="实用就餐建议">
+            <section class="recommendation-block" aria-labelledby="dish-suggestions-title">
+              <h3 id="dish-suggestions-title">具体菜建议</h3>
+              <ul id="result-dish-suggestions" class="recommendation-list"></ul>
+            </section>
+            <section class="recommendation-block" aria-labelledby="reality-adjustment-title">
+              <h3 id="reality-adjustment-title">现实修正</h3>
+              <p id="result-reality-adjustment"></p>
+            </section>
+            <section class="recommendation-block" aria-labelledby="fallbacks-title">
+              <h3 id="fallbacks-title">替代方案</h3>
+              <ul id="result-fallbacks" class="recommendation-list"></ul>
+            </section>
+            <aside id="result-entertainment-note" class="entertainment-note" aria-label="娱乐性饮食提示"></aside>
+          </div>
           <div class="result-actions">
             <button id="confirm-button" class="confirm-button" type="button">此餐可取</button>
             <button id="retry-button" class="retry-button" type="button">再演一卦</button>

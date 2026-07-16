@@ -525,6 +525,7 @@ function initialiseCastingInterface() {
     const { calendar, upper, lower, primary } = divination;
     const setText = (id, value) => { const element = $(`#${id}`); if (element) element.textContent = value; };
     ['mutual-meta', 'moving-line-meta', 'changed-meta', 'image-reading', 'food-cue', 'transition-cue', 'formula-reading', 'oracle-title', 'result-title', 'meal-meta', 'oracle-line', 'meal-reason'].forEach((id) => setText(id, ''));
+    renderPracticalRecommendation(null);
     const changedLines = $('#changed-lines');
     if (changedLines) changedLines.replaceChildren();
     setText('result-ordinal', '卦象书成');
@@ -558,11 +559,62 @@ function initialiseCastingInterface() {
     renderYaoStack('changed-lines', changed.lines);
     setText('oracle-title', `梅花数时合参 · ${primary.name}`);
     setText('result-title', meal.name);
-    setText('meal-meta', `${meal.source} / ${meal.venue}`);
+    const recommendation = meal.recommendation;
+    const recommendationMeta = recommendation?.isUniversalTemplate ? '通用食堂餐型' : (recommendation?.isOutingCuisine ? '校外菜系建议' : '日常餐食建议');
+    setText('meal-meta', `${meal.source} / ${meal.venue} / ${recommendationMeta}`);
     setText('oracle-line', '本卦参与餐签的确定性排序；餐别、地点与日常均衡规则仍优先。');
     setText('meal-reason', meal.reason);
+    renderPracticalRecommendation(meal.recommendation);
     resultCard.classList.remove('is-empty', 'is-revealing'); resultEmpty.hidden = true; resultContent.hidden = false; void resultCard.offsetWidth; resultCard.classList.add('is-revealing');
     announce(`餐卦已显现：${meal.name}，${meal.source}${meal.venue}。`);
+  }
+  function renderPracticalRecommendation(recommendation) {
+    const container = $('.practical-recommendation');
+    if (!container) return;
+    if (!isRecord(recommendation)) {
+      renderRecommendationList('result-dish-suggestions', []);
+      renderRecommendationList('result-fallbacks', []);
+      const reality = $('#result-reality-adjustment'); const note = $('#result-entertainment-note');
+      if (reality) reality.textContent = '';
+      if (note) note.textContent = '';
+      container.hidden = true;
+      return;
+    }
+
+    const reasons = Array.isArray(recommendation.reasons) ? recommendation.reasons : [];
+    const reasonFor = (label) => reasons.find((reason) => reason?.label === label)?.text || '';
+    const suggestions = Array.isArray(recommendation.dishSuggestions)
+      ? recommendation.dishSuggestions
+      : (Array.isArray(recommendation.suggestions) ? recommendation.suggestions : []);
+    const isCanteen = recommendation.isUniversalTemplate === true;
+    const isOuting = recommendation.isOutingCuisine === true;
+    const fallbackItems = isCanteen
+      ? recommendation.fallbacks
+      : (Array.isArray(recommendation.fallbackOptions)
+        ? recommendation.fallbackOptions.map((option) => `${option.cuisineLabel}：${option.dishSuggestions.join('、')}`)
+        : []);
+    const practicalFallbacks = fallbackItems?.length
+      ? fallbackItems
+      : [isOuting ? '若附近没有该菜系供应，请按实际菜单另选已启用菜系。' : '若当日窗口无供应，请按现场菜单选择同类完整一餐。'];
+    const realityText = isCanteen
+      ? reasonFor('现实修正')
+      : [reasonFor('天气倾向'), reasonFor('菜单范围')].filter(Boolean).join(' ');
+
+    renderRecommendationList('result-dish-suggestions', suggestions);
+    renderRecommendationList('result-fallbacks', practicalFallbacks);
+    const reality = $('#result-reality-adjustment');
+    const note = $('#result-entertainment-note');
+    if (reality) reality.textContent = realityText || '天气和近期餐食只参与轻度排序，实际供应与个人需求优先。';
+    if (note) note.textContent = recommendation.disclaimer || '娱乐性饮食提示：请以实际供应和个人情况为准。';
+    container.hidden = false;
+  }
+  function renderRecommendationList(id, items) {
+    const list = $(`#${id}`);
+    if (!list) return;
+    const values = Array.isArray(items) ? items.filter((item) => typeof item === 'string' && item.trim()) : [];
+    list.replaceChildren(...values.map((value) => {
+      const item = document.createElement('li'); item.textContent = value; return item;
+    }));
   }
   function renderYaoStack(id, lines, movingLine = null) {
     const stack = $(`#${id}`);
