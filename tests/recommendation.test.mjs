@@ -35,6 +35,7 @@ import {
   castingTimeline,
   chooseMeal,
   contextualSeed,
+  dailyFoodLogSlip,
   dailyBalanceTip,
   initialMenuFilters,
   filtersForMenuScope,
@@ -50,6 +51,7 @@ import {
   resolveWeather,
   saveStoredState,
   scoreMeal,
+  sevenDayFoodLogRecap,
   todayKey,
 } from '../assets/app.js';
 
@@ -1229,6 +1231,71 @@ test('daily balance tips are compact, non-medical, and based on confirmed record
     record('chicken', '早餐', '2026-07-13', 1),
     record('fish', '午餐', '2026-07-13', 2),
   ]), /变化/);
+});
+
+test('seven-day food-log recap stays local, uses only confirmed records, and offers gentle bounded follow-ups', () => {
+  const outsideNoodles = (period, date, confirmedAt) => ({ ...record('outside-noodles', period, date, confirmedAt), source: '校外', name: '校外面馆' });
+  const recordsByDate = {
+    '2026-07-10': [record('canteen-breakfast', '早餐', '2026-07-10', 10)],
+    '2026-07-11': [outsideNoodles('午餐', '2026-07-11', 20)],
+    '2026-07-12': [record('canteen-lunch', '午餐', '2026-07-12', 30)],
+    '2026-07-14': [outsideNoodles('晚餐', '2026-07-14', 40)],
+    '2026-07-16': [record('today-dinner', '晚餐', '2026-07-16', 50)],
+    '2026-07-17': [record('future', '早餐', '2026-07-17', 60)],
+    'not-a-date': [record('broken-date', '早餐', 'not-a-date', 70)],
+  };
+  const recap = sevenDayFoodLogRecap(recordsByDate, '2026-07-16');
+
+  assert.deepEqual(recap.window, { start: '2026-07-10', end: '2026-07-16' });
+  assert.equal(recap.recordCount, 5, 'future, malformed, and unconfirmed data must be ignored');
+  assert.deepEqual(recap.sources, { canteen: 3, outside: 2 });
+  assert.deepEqual(recap.repeatTrend, { kind: 'repeat', name: '校外面馆', count: 2 });
+  assert.ok(recap.suggestions.length >= 1 && recap.suggestions.length <= 3);
+  assert.match(recap.suggestions.join(' '), /轮换|变化/);
+  assert.doesNotMatch(JSON.stringify(recap), /热量|卡路里|医疗|治疗|疾病|营养/);
+
+  const empty = sevenDayFoodLogRecap({ '2026-07-16': [{ ...record('not-confirmed', '午餐', '2026-07-16', 1), confirmedAt: Number.NaN }] }, '2026-07-16');
+  assert.equal(empty.recordCount, 0);
+  assert.deepEqual(empty.sources, { canteen: 0, outside: 0 });
+  assert.equal(empty.repeatTrend.kind, 'none');
+  assert.ok(empty.suggestions.length <= 3);
+});
+
+test('daily food-log mini-slip says exactly which confirmed meals are recorded today', () => {
+  assert.equal(dailyFoodLogSlip([]), '今日小笺：三餐尚未记录。');
+  assert.equal(
+    dailyFoodLogSlip([
+      record('breakfast', '早餐', '2026-07-16', 1),
+      { ...record('unconfirmed-lunch', '午餐', '2026-07-16', 2), confirmedAt: Number.NaN },
+    ]),
+    '今日小笺：已记录早餐，午餐和晚餐待记。',
+  );
+  assert.equal(
+    dailyFoodLogSlip([
+      record('breakfast', '早餐', '2026-07-16', 1),
+      record('lunch', '午餐', '2026-07-16', 2),
+      record('dinner', '晚餐', '2026-07-16', 3),
+    ]),
+    '今日小笺：早餐、午餐、晚餐均已记录。',
+  );
+});
+
+test('food log static contract keeps a compact daily slip and private seven-day recap nearby', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const foodLog = html.slice(html.indexOf('<section class="food-log"'), html.indexOf('</section>', html.indexOf('<section class="food-log"')));
+  assert.match(foodLog, /id="food-log-slip"[^>]*aria-live="polite"/);
+  assert.match(foodLog, /id="seven-day-recap"/);
+  assert.match(foodLog, /近七日回顾/);
+  assert.match(foodLog, /仅在本机浏览器中计算/);
+
+  const app = readFileSync(new URL('../assets/app.js', import.meta.url), 'utf8');
+  assert.match(app, /sevenDayFoodLogRecap\(state\.recordsByDate, date\)/);
+  assert.match(app, /dailyFoodLogSlip\(\[\.\.\.records\.values\(\)\]\)/);
+
+  const css = readFileSync(new URL('../assets/style.css', import.meta.url), 'utf8');
+  for (const selector of ['.food-log-slip', '.seven-day-recap', '.recap-summary', '.recap-suggestions']) {
+    assert.match(css, new RegExp(`\\${selector.replace('.', '.')}\\s*\\{`), `missing ${selector} styling`);
+  }
 });
 
 test('normaliseMenu restores clean defaults for malformed persisted menus', () => {

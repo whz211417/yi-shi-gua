@@ -327,6 +327,37 @@ export function dailyBalanceTip(records = []) {
   return '今日均衡提示：已记餐食有蔬菜和变化，按你的食量继续安排就好。';
 }
 
+/** Describe which of today's confirmed meal slots have been written down. */
+export function dailyFoodLogSlip(records = []) {
+  const recorded = new Set((Array.isArray(records) ? records : [])
+    .filter(isConfirmedRecord)
+    .map((record) => record.mealPeriod));
+  const recordedPeriods = [...MEAL_PERIODS].filter((period) => recorded.has(period));
+  const pendingPeriods = [...MEAL_PERIODS].filter((period) => !recorded.has(period));
+  if (recordedPeriods.length === 0) return '今日小笺：三餐尚未记录。';
+  if (pendingPeriods.length === 0) return '今日小笺：早餐、午餐、晚餐均已记录。';
+  return `今日小笺：已记录${recordedPeriods.join('、')}，${pendingPeriods.join('和')}待记。`;
+}
+
+/** Summarise the seven local calendar days ending on dateKey without network or health inferences. */
+export function sevenDayFoodLogRecap(recordsByDate, dateKey = todayKey()) {
+  const end = isDateKey(dateKey) ? dateKey : todayKey();
+  const start = sevenDayStartKey(end);
+  const records = confirmedRecordsInWindow(recordsByDate, start, end);
+  const sources = {
+    canteen: records.filter((record) => record.source === '食堂').length,
+    outside: records.filter((record) => record.source === '校外').length,
+  };
+  const repeatTrend = recapRepeatTrend(records);
+  return {
+    window: { start, end },
+    recordCount: records.length,
+    sources,
+    repeatTrend,
+    suggestions: recapSuggestions(records.length, sources, repeatTrend),
+  };
+}
+
 function defaultStoredState() { return { menu: normaliseMenu(null), recordsByDate: {}, mealRelations: {} }; }
 function needsCatalogMigration(state) { return !Number.isInteger(state.catalogVersion) || state.catalogVersion < CATALOG_VERSION; }
 function mergeCatalogTemplates(menu) {
@@ -346,6 +377,45 @@ function isUsableMeal(meal) {
     && VALID_STAPLES.has(meal.staple) && VALID_PROTEINS.has(meal.protein) && VALID_VEGETABLES.has(meal.vegetable) && VALID_FLAVORS.has(meal.flavor) && typeof meal.enabled === 'boolean';
 }
 function isUsableRecord(record, date) { return isUsableMeal(record) && MEAL_PERIODS.has(record.mealPeriod) && record.date === date && Number.isFinite(record.confirmedAt); }
+function isConfirmedRecord(record) { return isRecord(record) && typeof record.date === 'string' && isUsableRecord(record, record.date); }
+function sevenDayStartKey(end) {
+  const parts = dateParts(end);
+  if (!parts) return end;
+  const start = new Date(parts.year, parts.month - 1, parts.day);
+  start.setDate(start.getDate() - 6);
+  return todayKey(start);
+}
+function confirmedRecordsInWindow(recordsByDate, start, end) {
+  if (!isRecord(recordsByDate)) return [];
+  return Object.entries(recordsByDate).flatMap(([date, records]) => (
+    isDateKey(date) && date >= start && date <= end && Array.isArray(records)
+      ? records.filter((record) => isConfirmedRecord(record) && record.date === date)
+      : []
+  ));
+}
+function recapRepeatTrend(records) {
+  if (records.length === 0) return { kind: 'none', name: '', count: 0 };
+  const counts = new Map();
+  records.forEach((record, index) => {
+    const name = hasText(record.name) ? record.name.trim() : record.id;
+    const current = counts.get(name) || { name, count: 0, firstIndex: index };
+    current.count += 1;
+    counts.set(name, current);
+  });
+  const [mostRepeated] = [...counts.values()].sort((left, right) => right.count - left.count || left.firstIndex - right.firstIndex || left.name.localeCompare(right.name));
+  return mostRepeated.count >= 2
+    ? { kind: 'repeat', name: mostRepeated.name, count: mostRepeated.count }
+    : { kind: 'varied', name: '', count: 1 };
+}
+function recapSuggestions(recordCount, sources, repeatTrend) {
+  if (recordCount === 0) return ['先如实记下一餐，七日回顾会慢慢成形。'];
+  const suggestions = [];
+  if (repeatTrend.kind === 'repeat') suggestions.push('常吃的餐食可与另一种日常选择轮换，留一点变化。');
+  if (sources.canteen === 0) suggestions.push('下周若有食堂用餐，记下一次实际选择即可。');
+  if (sources.outside === 0) suggestions.push('下周若有校外用餐，记下一次实际选择即可。');
+  if (suggestions.length === 0) suggestions.push('下周继续按实际情况记录，保留自己的节奏。');
+  return suggestions.slice(0, 3);
+}
 function isDateKey(value) { return Boolean(dateParts(value)); }
 function dateParts(value) {
   const match = typeof value === 'string' && /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -426,14 +496,14 @@ function initialiseCastingInterface() {
   const $ = (selector) => document.querySelector(selector);
   const numberInput = $('#number-input'); const randomButton = $('#random-number-button'); const castButton = $('#cast-button');
   const retryButton = $('#retry-button'); const confirmButton = $('#confirm-button'); const resultCard = $('#result-card');
-  const resultEmpty = $('#result-empty'); const resultContent = $('#result-content'); const liveRegion = $('#live-region'); const dateStamp = $('#today-date'); const calendarStatus = $('#calendar-status'); const balanceTip = $('#daily-balance-tip');
+  const resultEmpty = $('#result-empty'); const resultContent = $('#result-content'); const liveRegion = $('#live-region'); const dateStamp = $('#today-date'); const calendarStatus = $('#calendar-status'); const balanceTip = $('#daily-balance-tip'); const foodLogSlip = $('#food-log-slip'); const recapSummary = $('#recap-summary'); const recapRepeat = $('#recap-repeat'); const recapSuggestions = $('#recap-suggestions');
   const menuOpenButton = $('#menu-open-button'); const menuCloseButton = $('#menu-close-button'); const menuPanel = $('#menu-panel'); const menuList = $('#menu-list');
   const menuScopeTabs = [...document.querySelectorAll('#menu-scope-tabs [data-menu-scope]')]; const cuisineDirectory = $('#cuisine-directory'); const cuisineDirectorySummary = $('#cuisine-directory-summary'); const mealDetailsTrigger = $('#meal-details-trigger'); const mealEditorPanel = $('#meal-editor-panel');
   const addMealButton = $('#add-meal-button'); const resetMenuButton = $('#reset-menu-button');
   const menuFilterZone = $('#menu-filter-zone'); const menuFilterCuisine = $('#menu-filter-cuisine'); const menuFilterFamily = $('#menu-filter-family');
   const menuFilterEnabled = $('#menu-filter-enabled'); const menuFilterQuery = $('#menu-filter-query'); const menuFilterClear = $('#menu-filter-clear'); const menuFilterSummary = $('#menu-filter-summary');
   const menuZoneInputs = menuFilterZone ? [...menuFilterZone.querySelectorAll('input[name="menu-zone"]')] : [];
-  if (![numberInput, randomButton, castButton, retryButton, confirmButton, resultCard, resultEmpty, resultContent, liveRegion, dateStamp, calendarStatus, balanceTip, menuOpenButton, menuCloseButton, menuPanel, menuList, mealDetailsTrigger, mealEditorPanel, addMealButton, resetMenuButton].every(Boolean)) return;
+  if (![numberInput, randomButton, castButton, retryButton, confirmButton, resultCard, resultEmpty, resultContent, liveRegion, dateStamp, calendarStatus, balanceTip, foodLogSlip, recapSummary, recapRepeat, recapSuggestions, menuOpenButton, menuCloseButton, menuPanel, menuList, mealDetailsTrigger, mealEditorPanel, addMealButton, resetMenuButton].every(Boolean)) return;
   const today = new Date(); const date = todayKey(today); const saved = loadStoredState(safeStorage());
   const state = { menu: saved.menu, recordsByDate: saved.recordsByDate, mealRelations: saved.mealRelations, rejectedIds: [], selected: null };
   // The catalog opens in the Chinese-cuisine scope; world entries are never mixed into this first directory view.
@@ -687,7 +757,19 @@ function initialiseCastingInterface() {
       if (record) { label.textContent = record.name; slot.classList.add('is-filled'); if (!undo) { undo = document.createElement('button'); undo.type = 'button'; undo.className = 'undo-button'; undo.textContent = '撤销'; undo.addEventListener('click', () => undoMeal(period)); slot.append(undo); } }
       else { label.textContent = '尚未落笔'; slot.classList.remove('is-filled'); undo?.remove(); }
     });
-    balanceTip.textContent = dailyBalanceTip([...records.values()]);
+    const todayRecords = [...records.values()];
+    balanceTip.textContent = dailyBalanceTip(todayRecords);
+    foodLogSlip.textContent = dailyFoodLogSlip([...records.values()]);
+    const recap = sevenDayFoodLogRecap(state.recordsByDate, date);
+    recapSummary.textContent = recap.recordCount === 0
+      ? '近七日暂无已确认餐食。'
+      : `近七日已确认 ${recap.recordCount} 餐：食堂 ${recap.sources.canteen} 餐，校外 ${recap.sources.outside} 餐。`;
+    recapRepeat.textContent = recap.repeatTrend.kind === 'repeat'
+      ? `重复趋势：${recap.repeatTrend.name}出现 ${recap.repeatTrend.count} 次。`
+      : (recap.repeatTrend.kind === 'varied' ? '重复趋势：近七日记录没有明显重复。' : '重复趋势：记录增加后会在这里呈现。');
+    recapSuggestions.replaceChildren(...recap.suggestions.map((suggestion) => {
+      const item = document.createElement('li'); item.textContent = suggestion; return item;
+    }));
   }
   function renderMenu() {
     const isWorldScope = menuFilters.zone === '世界料理';

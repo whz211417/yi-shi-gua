@@ -529,7 +529,29 @@ h1 span { display: block; white-space: nowrap; }
 .log-slots span { color: var(--bronze-light); font-size: 12px; letter-spacing: .12em; }
 .log-slots strong { color: var(--paper-muted); font-size: 14px; font-weight: 400; }
 .log-slots li.is-filled strong { color: var(--paper-light); }
+.food-log-slip {
+  margin: 14px 0 0;
+  color: var(--bronze-light);
+  font-size: 13px;
+  line-height: 1.7;
+}
 .daily-balance-tip { margin: 14px 0 0; padding: 12px 14px; border-left: 2px solid var(--red-bright); color: var(--paper-muted); background: rgb(255 255 255 / .035); font-size: 13px; line-height: 1.7; }
+.seven-day-recap {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 15px;
+  border: 1px solid rgb(210 174 109 / .3);
+  background: linear-gradient(135deg, rgb(210 174 109 / .07), rgb(255 255 255 / .018));
+}
+.recap-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.recap-heading h3 { margin: 0; color: var(--bronze-light); font-family: "Songti SC", "STSong", serif; font-size: 18px; font-weight: 500; }
+.recap-heading p { margin: 0; color: var(--ash); font-size: 11px; }
+.recap-summary { margin: 0; color: var(--paper); font-size: 13px; line-height: 1.7; }
+.recap-repeat { margin: 0; color: var(--paper-muted); font-size: 13px; line-height: 1.7; }
+.recap-suggestions { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.recap-suggestions li { position: relative; padding-left: 13px; color: var(--paper-muted); font-size: 12px; line-height: 1.65; }
+.recap-suggestions li::before { position: absolute; top: .72em; left: 0; width: 5px; height: 1px; content: ""; background: var(--red-bright); }
 .site-footer { padding: 24px 2px 0; border-top: 1px solid var(--line); }
 .site-footer p { max-width: 52ch; margin: 0; color: var(--ash); font-size: 11px; line-height: 1.7; }
 
@@ -647,7 +669,7 @@ h1 span { display: block; white-space: nowrap; }
   .entertainment-note { margin-top: 12px; }
   .food-log { display: grid; grid-template-columns: minmax(165px, .56fr) minmax(0, 2fr); gap: clamp(42px, 8vw, 102px); padding: 48px 6% 34px; }
   .food-log-heading h2 { margin: 0; }
-  .daily-balance-tip { grid-column: 2; }
+  .food-log-slip, .daily-balance-tip, .seven-day-recap { grid-column: 2; }
 }
 
 @media (min-width: 900px) {
