@@ -520,6 +520,31 @@ test('practical recommendation result contract exposes concrete choices and real
   }
 });
 
+test('ink seal ritual decorative layers are isolated from result text', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const resultStart = html.indexOf('<section id="result-card"');
+  const resultEnd = html.indexOf('<section class="food-log"', resultStart);
+  const resultCard = html.slice(resultStart, resultEnd);
+
+  assert.match(resultCard, /<div class="ink-ritual" aria-hidden="true">[\s\S]*<div class="casting-ritual" aria-hidden="true">/);
+  for (const className of [
+    'ritual-border-outer',
+    'ritual-border-inner',
+    'trigram-inscription-ring',
+    'calendar-time-inscription',
+    'vermilion-food-seal',
+  ]) {
+    assert.match(resultCard, new RegExp(`class="[^"]*${className}[^"]*" aria-hidden="true"`), `${className} must remain decorative`);
+  }
+  assert.match(resultCard, /class="trigram-inscription-ring" aria-hidden="true">[^<]*乾[^<]*坤/);
+  assert.match(resultCard, /class="calendar-time-inscription" aria-hidden="true">年·月·日·时<\/span>/);
+  assert.match(resultCard, /class="[^\"]*vermilion-food-seal[^\"]*" aria-hidden="true">食<\/span>/);
+
+  for (const id of ['result-ordinal', 'result-empty', 'result-content', 'result-title', 'oracle-title', 'meal-meta', 'oracle-line', 'meal-reason']) {
+    assert.equal((resultCard.match(new RegExp(`id="${id}"`, 'g')) || []).length, 1, `${id} must remain the sole result-text node`);
+  }
+});
+
 test('compact menu rows open a focused on-demand editor instead of inline forms', () => {
   const app = readFileSync(new URL('../assets/app.js', import.meta.url), 'utf8');
 
