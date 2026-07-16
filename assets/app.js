@@ -10,6 +10,19 @@ export const CATALOG_VERSION = 1;
 const REQUIRED_MEAL_FIELDS = ['id', 'name', 'source', 'venue', 'meals', 'staple', 'protein', 'vegetable', 'flavor', 'enabled'];
 const RECENT_HISTORY_WINDOW = 5;
 const MEAL_PERIODS = new Set(['早餐', '午餐', '晚餐']);
+const CAST_CLEANUP_DELAY = 1550;
+const CASTING_TIMELINE = Object.freeze([
+  Object.freeze({ phase: 'count', delay: 0 }),
+  Object.freeze({ phase: 'ink', delay: 160 }),
+  Object.freeze({ phase: 'seal', delay: 720 }),
+  Object.freeze({ phase: 'lines', delay: 1000 }),
+  Object.freeze({ phase: 'reveal', delay: 1540 }),
+]);
+
+/** Return a defensive, finite phase schedule; reduced motion exposes the result synchronously. */
+export function castingTimeline({ reducedMotion = false } = {}) {
+  return reducedMotion ? [{ phase: 'reveal', delay: 0 }] : CASTING_TIMELINE.map(({ phase, delay }) => ({ phase, delay }));
+}
 const VALID_SOURCES = new Set(['食堂', '校外', '待确认']);
 export const MENU_OPTIONS = {
   sources: [...VALID_SOURCES],
@@ -423,6 +436,7 @@ function initialiseCastingInterface() {
   castButton.addEventListener('click', () => cast(false)); retryButton.addEventListener('click', () => cast(true)); confirmButton.addEventListener('click', confirmMeal);
   let menuInvoker = null;
   let casting = false;
+  let castRevealed = false;
   let castTimers = [];
   const castElements = [resultCard, numberInput, castButton].filter(Boolean);
   const menuFocusableSelector = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), [href]';
@@ -479,22 +493,26 @@ function initialiseCastingInterface() {
     });
     if (!castingRecommendation.meal) { state.rejectedIds = []; announce(castingRecommendation.reason); return; }
     state.selected = { ...castingRecommendation.meal, meals: [...castingRecommendation.meal.meals], reason: castingRecommendation.reason };
-    const reveal = () => showResult(divination, state.selected, reportNumber);
-    if (prefersReducedMotion()) { reveal(); return; }
+    if (prefersReducedMotion()) { showResult(divination, state.selected, reportNumber); return; }
     startCasting();
-    scheduleCastPhase('ink', 180, () => showCastingHexagram(divination));
-    castTimers.push(window.setTimeout(() => {
-      if (!casting) return;
-      setCastPhase('seal');
-      reveal();
-    }, 760));
-    castTimers.push(window.setTimeout(finishCasting, 1040));
+    for (const { phase, delay } of castingTimeline()) {
+      if (phase === 'count') continue;
+      scheduleCastPhase(phase, delay, () => {
+        if (phase === 'ink') showCastingHexagram(divination);
+        if (phase === 'reveal') {
+          castRevealed = true;
+          showResult(divination, state.selected, reportNumber);
+        }
+      });
+    }
+    castTimers.push(window.setTimeout(finishCasting, CAST_CLEANUP_DELAY));
   }
   function prefersReducedMotion() {
     return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
   function startCasting() {
     casting = true;
+    castRevealed = false;
     castButton.disabled = true;
     retryButton.disabled = true;
     confirmButton.disabled = true;
@@ -511,16 +529,18 @@ function initialiseCastingInterface() {
   function setCastPhase(phase) {
     castElements.forEach((element) => { element.dataset.castPhase = phase; });
   }
-  function finishCasting() {
+  function finishCasting({ discardSelection = false } = {}) {
     castTimers.forEach((timer) => window.clearTimeout(timer));
     castTimers = [];
+    if (discardSelection) state.selected = null;
     casting = false;
+    castRevealed = false;
     castButton.disabled = false;
     retryButton.disabled = false;
     confirmButton.disabled = !state.selected;
     castElements.forEach((element) => { element.classList.remove('is-casting'); delete element.dataset.castPhase; });
   }
-  window.addEventListener('pagehide', () => { if (casting) state.selected = null; finishCasting(); });
+  window.addEventListener('pagehide', () => finishCasting({ discardSelection: casting && !castRevealed }));
   function showCastingHexagram(divination) {
     const { calendar, upper, lower, primary } = divination;
     const setText = (id, value) => { const element = $(`#${id}`); if (element) element.textContent = value; };

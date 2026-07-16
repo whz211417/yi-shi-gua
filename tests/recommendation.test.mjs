@@ -29,6 +29,7 @@ import {
   trigramFromRemainder,
 } from '../assets/divination.js';
 import {
+  castingTimeline,
   chooseMeal,
   contextualSeed,
   dailyBalanceTip,
@@ -568,6 +569,30 @@ test('ink seal ritual CSS stages the restrained casting sequence accessibly', ()
   assert.match(css, /@media \(max-width: 375px\)[\s\S]*\.casting-ritual/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.casting-ritual[\s\S]*animation:\s*none\s*!important/);
   assert.doesNotMatch(css, /animation-iteration-count\s*:\s*infinite|rotate[XYZ]\(|rotate3d\(|perspective:|\bfire\b|\blightning\b|\bspinner\b|0 0 30px/i);
+});
+
+test('casting timeline sequences ink seal phases and clears interrupted state', () => {
+  assert.deepEqual(castingTimeline(), [
+    { phase: 'count', delay: 0 },
+    { phase: 'ink', delay: 160 },
+    { phase: 'seal', delay: 720 },
+    { phase: 'lines', delay: 1000 },
+    { phase: 'reveal', delay: 1540 },
+  ]);
+  assert.deepEqual(castingTimeline({ reducedMotion: true }), [{ phase: 'reveal', delay: 0 }], 'reduced motion must not wait through decorative phases');
+  assert.ok(castingTimeline().at(-1).delay <= 1550, 'the result must reveal within the 1.55 second ritual budget');
+
+  const app = readFileSync(new URL('../assets/app.js', import.meta.url), 'utf8');
+  assert.match(app, /for \(const \{ phase, delay \} of castingTimeline\(\)\)/, 'normal casts must use the phase schedule');
+  assert.match(app, /if \(phase === 'ink'\) showCastingHexagram\(divination\);/, 'the ink phase must populate the six-line visual stage before sealing');
+  assert.match(app, /if \(phase === 'reveal'\) \{\s*castRevealed = true;\s*showResult\(divination, state\.selected, reportNumber\);\s*\}/, 'only reveal may publish the selected recommendation');
+  const inkStage = app.slice(app.indexOf('function showCastingHexagram(divination)'), app.indexOf('function showResult(divination, meal, ordinal)'));
+  assert.match(inkStage, /renderYaoStack\('primary-lines', primary\.lines\);/, 'ink must create the lower-first six-line stack before the lines phase animates it');
+  const revealStage = app.slice(app.indexOf('function showResult(divination, meal, ordinal)'), app.indexOf('function renderPracticalRecommendation(recommendation)'));
+  assert.match(revealStage, /renderYaoStack\('primary-lines', primary\.lines, movingLine\);/, 'the moving-line marker must arrive only with the final reveal');
+  assert.match(app, /function finishCasting\(\{ discardSelection = false \} = \{\}\)/, 'cleanup must distinguish an interrupted cast from a completed selection');
+  assert.match(app, /if \(discardSelection\) state\.selected = null;/, 'interrupted casts must discard their transient selection');
+  assert.match(app, /window\.addEventListener\('pagehide', \(\) => finishCasting\(\{ discardSelection: casting && !castRevealed \}\)\);/, 'pagehide must clear pending timers while preserving a just-revealed selection');
 });
 
 test('compact menu rows open a focused on-demand editor instead of inline forms', () => {
