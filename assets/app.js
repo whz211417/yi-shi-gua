@@ -489,6 +489,7 @@ function initialiseCastingInterface() {
     if (casting) return;
     const now = new Date();
     const reportNumber = normaliseNumber(); const mealPeriod = selectedValue('meal-period', '午餐'); const place = selectedValue('place', '在学校'); const weather = selectedValue('weather', '自动以本地日期推演');
+    const dailyState = { budget: selectedValue('daily-state-budget', '正常'), time: selectedValue('daily-state-time', '正常'), fullness: selectedValue('daily-state-fullness', '正常'), mood: selectedValue('daily-state-mood', '不限') };
     let divination;
     try {
       divination = deriveDivination(reportNumber, beijingCalendarParts(now));
@@ -500,7 +501,7 @@ function initialiseCastingInterface() {
     }
     if (isRetry && state.selected) state.rejectedIds.push(state.selected.id);
     const primaryTrigrams = { upper: divination.upper.name, lower: divination.lower.name };
-    const context = { dateKey: date, mealPeriod, place, weather };
+    const context = { dateKey: date, mealPeriod, place, weather, dailyState };
     const seed = divinationSeed(divination, context);
     const history = normaliseRecordsByDate(state.recordsByDate).history;
     const castingRecommendation = recommendMealForCasting({
@@ -634,8 +635,8 @@ function initialiseCastingInterface() {
       ? fallbackItems
       : [isOuting ? '若附近没有该菜系供应，请按实际菜单另选已启用菜系。' : '若当日窗口无供应，请按现场菜单选择同类完整一餐。'];
     const realityText = isCanteen
-      ? reasonFor('现实修正')
-      : [reasonFor('天气倾向'), reasonFor('菜单范围')].filter(Boolean).join(' ');
+      ? [reasonFor('现实修正'), reasonFor('今日状态')].filter(Boolean).join(' ')
+      : [reasonFor('天气倾向'), reasonFor('今日状态'), reasonFor('菜单范围')].filter(Boolean).join(' ');
 
     renderRecommendationList('result-dish-suggestions', suggestions);
     renderRecommendationList('result-fallbacks', practicalFallbacks);

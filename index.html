@@ -75,6 +75,46 @@
           </fieldset>
         </div>
 
+        <details id="daily-state" class="daily-state">
+          <summary>今日状态 <span>可跳过</span></summary>
+          <p class="daily-state-note">只作轻度排序，不会筛掉可选餐食，也不会保存为跨日偏好。</p>
+          <div class="daily-state-grid">
+            <fieldset id="daily-state-budget" class="choice-group">
+              <legend>预算</legend>
+              <div class="segmented-control" role="radiogroup" aria-label="预算">
+                <label><input type="radio" name="daily-state-budget" value="省钱" /><span>省钱</span></label>
+                <label><input type="radio" name="daily-state-budget" value="正常" checked /><span>正常</span></label>
+                <label><input type="radio" name="daily-state-budget" value="想改善" /><span>想改善</span></label>
+              </div>
+            </fieldset>
+            <fieldset id="daily-state-time" class="choice-group">
+              <legend>时间</legend>
+              <div class="segmented-control" role="radiogroup" aria-label="时间">
+                <label><input type="radio" name="daily-state-time" value="赶时间" /><span>赶时间</span></label>
+                <label><input type="radio" name="daily-state-time" value="正常" checked /><span>正常</span></label>
+                <label><input type="radio" name="daily-state-time" value="可以慢慢吃" /><span>可以慢慢吃</span></label>
+              </div>
+            </fieldset>
+            <fieldset id="daily-state-fullness" class="choice-group">
+              <legend>饱腹</legend>
+              <div class="segmented-control" role="radiogroup" aria-label="饱腹">
+                <label><input type="radio" name="daily-state-fullness" value="想吃饱" /><span>想吃饱</span></label>
+                <label><input type="radio" name="daily-state-fullness" value="正常" checked /><span>正常</span></label>
+                <label><input type="radio" name="daily-state-fullness" value="想清淡" /><span>想清淡</span></label>
+              </div>
+            </fieldset>
+            <fieldset id="daily-state-mood" class="choice-group">
+              <legend>心情</legend>
+              <div class="segmented-control" role="radiogroup" aria-label="心情">
+                <label><input type="radio" name="daily-state-mood" value="不限" checked /><span>不限</span></label>
+                <label><input type="radio" name="daily-state-mood" value="想热乎" /><span>想热乎</span></label>
+                <label><input type="radio" name="daily-state-mood" value="想重口" /><span>想重口</span></label>
+                <label><input type="radio" name="daily-state-mood" value="想吃点好的" /><span>想吃点好的</span></label>
+              </div>
+            </fieldset>
+          </div>
+        </details>
+
         <div class="number-row">
           <div class="number-field">
             <label for="number-input">报数</label>

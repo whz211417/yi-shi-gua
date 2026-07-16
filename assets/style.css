@@ -219,6 +219,38 @@ h1 span { display: block; white-space: nowrap; }
 .choice-grid { display: grid; gap: 20px; }
 .choice-group { min-width: 0; margin: 0; padding: 0; border: 0; }
 .choice-group legend { margin-bottom: 10px; padding: 0; color: #685b42; font-size: 13px; font-weight: 700; letter-spacing: .06em; }
+.daily-state {
+  margin-top: 17px;
+  border-top: 1px solid rgb(74 57 30 / .25);
+  border-bottom: 1px solid rgb(74 57 30 / .25);
+}
+.daily-state summary {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #4f4029;
+  font-size: 14px;
+  font-weight: 700;
+  list-style: none;
+  cursor: pointer;
+}
+.daily-state summary::-webkit-details-marker { display: none; }
+.daily-state summary::after {
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  content: "";
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform .18s ease;
+}
+.daily-state[open] summary::after { transform: rotate(225deg) translate(-2px, -2px); }
+.daily-state summary span { margin-left: auto; color: #806d4b; font-size: 12px; font-weight: 400; }
+.daily-state-note { margin: 0 0 14px; color: #665535; font-size: 12px; line-height: 1.7; }
+.daily-state-grid { display: grid; gap: 18px; padding: 0 0 19px; }
 .segmented-control { display: flex; flex-wrap: wrap; gap: 7px; }
 .segmented-control label { min-width: 76px; flex: 1 1 76px; }
 .segmented-control input { position: absolute; opacity: 0; pointer-events: none; }

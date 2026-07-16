@@ -594,6 +594,41 @@ test('practical recommendation result contract exposes concrete choices and real
   }
 });
 
+test('optional daily-state control stays collapsed until wanted and reaches practical casting explanations', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const panelStart = html.indexOf('<aside id="menu-panel"');
+  const home = html.slice(0, panelStart);
+  const stateStart = home.indexOf('<details id="daily-state"');
+  const stateEnd = home.indexOf('</details>', stateStart);
+  const dailyState = home.slice(stateStart, stateEnd);
+
+  assert.ok(stateStart > home.indexOf('<fieldset id="weather"'), 'daily state belongs with the casting context');
+  assert.match(dailyState, /<summary>今日状态.*可跳过.*<\/summary>/);
+  assert.doesNotMatch(dailyState, /<details[^>]*\bopen\b/);
+  for (const [field, values, fallback] of [
+    ['budget', ['省钱', '正常', '想改善'], '正常'],
+    ['time', ['赶时间', '正常', '可以慢慢吃'], '正常'],
+    ['fullness', ['想吃饱', '正常', '想清淡'], '正常'],
+    ['mood', ['不限', '想热乎', '想重口', '想吃点好的'], '不限'],
+  ]) {
+    const fieldsetStart = dailyState.indexOf(`<fieldset id="daily-state-${field}"`);
+    const fieldset = dailyState.slice(fieldsetStart, dailyState.indexOf('</fieldset>', fieldsetStart));
+    assert.ok(fieldsetStart >= 0, `missing ${field} daily-state fieldset`);
+    for (const value of values) assert.match(fieldset, new RegExp(`<input[^>]*name="daily-state-${field}"[^>]*value="${value}"[^>]*><span>${value}<\\/span>`), `missing ${field} ${value}`);
+    assert.match(fieldset, new RegExp(`<input[^>]*name="daily-state-${field}"[^>]*value="${fallback}"[^>]*checked`), `${field} has a neutral default`);
+  }
+
+  const app = readFileSync(new URL('../assets/app.js', import.meta.url), 'utf8');
+  assert.match(app, /const dailyState = \{ budget: selectedValue\('daily-state-budget', '正常'\), time: selectedValue\('daily-state-time', '正常'\), fullness: selectedValue\('daily-state-fullness', '正常'\), mood: selectedValue\('daily-state-mood', '不限'\) \};/);
+  assert.match(app, /const context = \{ dateKey: date, mealPeriod, place, weather, dailyState \};/);
+  assert.match(app, /reasonFor\('今日状态'\)/);
+
+  const css = readFileSync(new URL('../assets/style.css', import.meta.url), 'utf8');
+  for (const selector of ['.daily-state', '.daily-state summary', '.daily-state-grid']) {
+    assert.match(css, new RegExp(`\\${selector.replace('.', '.')}\\s*\\{`), `missing ${selector} styling`);
+  }
+});
+
 test('ink seal ritual decorative layers are isolated from result text', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const resultStart = html.indexOf('<section id="result-card"');
