@@ -603,6 +603,13 @@ h1 span { display: block; white-space: nowrap; }
 .menu-periods { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 0; padding: 0; border: 0; }
 .menu-periods legend { width: 100%; margin-bottom: 2px; color: var(--paper-muted); font-size: 12px; }
 .menu-periods label { display: inline-flex; min-height: 44px; align-items: center; gap: 6px; color: var(--paper-muted); font-size: 13px; }
+.meal-relations { display: flex; flex-wrap: wrap; gap: 7px; margin: 0; padding: 0; border: 0; }
+.meal-relations legend { width: 100%; margin-bottom: 2px; padding: 0; color: var(--paper-muted); font-size: 12px; }
+.meal-relations label { position: relative; display: inline-flex; min-height: 44px; align-items: center; }
+.meal-relations input { position: absolute; opacity: 0; pointer-events: none; }
+.meal-relations span { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--paper-muted); background: rgb(255 255 255 / .02); font-size: 12px; }
+.meal-relations input:checked + span { border-color: rgb(174 139 76 / .75); color: var(--bronze-light); background: rgb(174 139 76 / .12); }
+.meal-relations input:focus-visible + span { outline: 2px solid var(--bronze-light); outline-offset: 2px; }
 .menu-row-actions, .menu-panel-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .menu-row-actions { padding-top: 2px; }
 .menu-small-button, .menu-delete-button { padding: 0 11px; }

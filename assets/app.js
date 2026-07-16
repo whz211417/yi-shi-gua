@@ -816,6 +816,21 @@ function initialiseCastingInterface() {
     selectInput('protein', '蛋白', meal.protein, MENU_OPTIONS.proteins);
     selectInput('vegetable', '蔬菜', meal.vegetable, MENU_OPTIONS.vegetables);
     selectInput('flavor', '口味', meal.flavor, MENU_OPTIONS.flavors);
+    const relationOptions = [
+      { value: 'frequent', label: '常吃' },
+      { value: 'tried', label: '吃过' },
+      { value: 'wish', label: '想吃' },
+      { value: 'unmarked', label: '未标记' },
+    ];
+    const relationFieldset = document.createElement('fieldset'); relationFieldset.className = 'meal-relations'; relationFieldset.setAttribute('data-editor-field', 'relation');
+    const relationLegend = document.createElement('legend'); relationLegend.textContent = '我的关系'; relationFieldset.append(relationLegend);
+    const currentRelation = state.mealRelations[meal.id] || 'unmarked';
+    relationOptions.forEach(({ value, label: labelText }) => {
+      const label = document.createElement('label'); const input = document.createElement('input'); const text = document.createElement('span');
+      input.type = 'radio'; input.name = 'relation'; input.value = value; input.checked = currentRelation === value;
+      text.textContent = labelText; label.append(input, text); relationFieldset.append(label);
+    });
+    form.append(relationFieldset);
     const actions = document.createElement('div'); actions.className = 'menu-row-actions';
     const save = document.createElement('button'); save.type = 'submit'; save.className = 'confirm-button'; save.textContent = '保存修改';
     const close = document.createElement('button'); close.type = 'button'; close.className = 'retry-button'; close.textContent = '取消'; close.addEventListener('click', closeMealEditor);
@@ -828,6 +843,7 @@ function initialiseCastingInterface() {
   function saveMealEditor(event) {
     event.preventDefault();
     const form = event.currentTarget;
+    const relation = form.elements.relation.value;
     const changes = {
       name: form.elements.name.value.trim(),
       venue: form.elements.venue.value.trim(),
@@ -839,6 +855,7 @@ function initialiseCastingInterface() {
       flavor: form.elements.flavor.value,
     };
     if (updateMeal(form.dataset.mealId, changes)) {
+      setMealRelation(form.dataset.mealId, relation);
       closeMealEditor();
       announce(`已保存${changes.name}。`);
     }
@@ -859,6 +876,13 @@ function initialiseCastingInterface() {
     persist();
     renderMenu();
     announce(`已删除${meal.name}。`);
+  }
+  function setMealRelation(id, relation) {
+    if (!state.menu.some((meal) => meal.id === id)) return false;
+    if (relation === 'unmarked') { delete state.mealRelations[id]; return true; }
+    if (!VALID_MEAL_RELATIONS.has(relation)) return false;
+    state.mealRelations[id] = relation;
+    return true;
   }
   function updateMeal(id, changes) { const index = state.menu.findIndex((meal) => meal.id === id); if (index < 0) return false; const candidate = { ...state.menu[index], ...changes }; if (!isValidMenu(state.menu.map((meal, itemIndex) => itemIndex === index ? candidate : meal))) { announce('请保留有效名称、档口和至少一个餐别。'); renderMenu(); return false; } state.menu[index] = candidate; persist(); renderMenu(); return true; }
   function announce(message) { liveRegion.textContent = ''; window.setTimeout(() => { liveRegion.textContent = message; }, 20); }

@@ -716,11 +716,22 @@ test('compact menu rows open a focused on-demand editor instead of inline forms'
     assert.match(editor, new RegExp(`'${field}'`), `editor must provide ${field}`);
   }
   assert.match(editor, /setAttribute\('data-editor-field', field\)/);
+  assert.match(editor, /const relationOptions = \[/, 'relation choices belong only to the focused editor');
+  for (const relation of ['frequent', 'tried', 'wish', 'unmarked']) {
+    assert.match(editor, new RegExp(`'${relation}'`), `editor must provide the ${relation} relation choice`);
+  }
+  assert.match(editor, /input\.type = 'radio'; input\.name = 'relation';/, 'relation choices must be mutually exclusive');
+  assert.match(editor, /state\.mealRelations\[meal\.id\] \|\| 'unmarked'/, 'the focused editor must reflect persisted relation state');
   assert.match(app, /form\.addEventListener\('submit', saveMealEditor\);/);
-  assert.match(app, /saveMealEditor[\s\S]*updateMeal\(/);
+  assert.match(app, /const relation = form\.elements\.relation\.value;/);
+  assert.match(app, /saveMealEditor[\s\S]*updateMeal\([\s\S]*setMealRelation\(form\.dataset\.mealId, relation\)/);
+  assert.match(app, /function setMealRelation\(id, relation\)/);
+  assert.match(app, /delete state\.mealRelations\[id\];/, 'unmarked must remove the persisted local relation');
   assert.match(app, /deleteMeal[\s\S]*persist\(\)[\s\S]*renderMenu\(\)/);
   const row = app.slice(app.indexOf('function menuRow(meal)'), app.indexOf('function syncSelectedMealTrigger()'));
   assert.doesNotMatch(row, /createElement\('form'\)/);
+  assert.match(row, /updateMeal\(meal\.id, \{ enabled: !meal\.enabled \}\)/, 'enabled remains an independent compact-row switch');
+  assert.doesNotMatch(row, /mealRelations/, 'relation editing must not leak into compact list rows');
 });
 
 test('menu filters use the catalog helpers and reduce dependent selections without mutation', () => {
