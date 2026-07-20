@@ -12,6 +12,9 @@ const REQUIRED_MEAL_FIELDS = ['id', 'name', 'source', 'venue', 'meals', 'staple'
 const RECENT_HISTORY_WINDOW = 5;
 const MEAL_PERIODS = new Set(['早餐', '午餐', '晚餐']);
 const CAST_CLEANUP_DELAY = 1550;
+export const AI_INTERPRET_ENDPOINT = 'https://yi-shi-gua-ai.whz211417.workers.dev/interpret';
+export const AI_INTERPRET_TIMEOUT_MS = 9000;
+const AI_ENTERTAINMENT_FORBIDDEN = /医疗|诊断|治疗|疾病|药物|疗效|治愈|营养处方|体质|经络|中焦|减肥|增肥/i;
 const CASTING_TIMELINE = Object.freeze([
   Object.freeze({ phase: 'count', delay: 0 }),
   Object.freeze({ phase: 'ink', delay: 160 }),
@@ -23,6 +26,37 @@ const CASTING_TIMELINE = Object.freeze([
 /** Return a defensive, finite phase schedule; reduced motion exposes the result synchronously. */
 export function castingTimeline({ reducedMotion = false } = {}) {
   return reducedMotion ? [{ phase: 'reveal', delay: 0 }] : CASTING_TIMELINE.map(({ phase, delay }) => ({ phase, delay }));
+}
+
+/** Build the minimal, entertainment-only payload accepted by the optional AI Worker. */
+export function buildAiInterpretationPayload({ hexagramName, mealPeriod, place, weather, dailyState, recommendation, dishes } = {}) {
+  const text = (value) => typeof value === 'string' ? value.trim() : '';
+  const payload = {
+    hexagram: text(hexagramName),
+    mealPeriod: text(mealPeriod),
+    place: text(place),
+    weather: text(weather),
+    dailyState: normaliseAiDailyState(dailyState),
+    recommendation: text(recommendation),
+    dishes: Array.isArray(dishes) ? dishes.map(text).filter(Boolean).slice(0, 4) : [],
+  };
+  return [payload.hexagram, payload.mealPeriod, payload.place, payload.weather, payload.recommendation].every(Boolean) ? payload : null;
+}
+
+/** Fetch an optional AI reading. Callers own cancellation and retain the local result on failure. */
+export async function requestAiFoodInterpretation(payload, { fetchImpl = globalThis.fetch, signal } = {}) {
+  if (!isRecord(payload) || typeof fetchImpl !== 'function') throw new Error('AI interpretation is unavailable');
+  const response = await fetchImpl(AI_INTERPRET_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal,
+  });
+  if (!response?.ok) throw new Error(`AI interpretation request failed (${response?.status || 'network'})`);
+  const body = await response.json();
+  const interpretation = typeof body?.interpretation === 'string' ? body.interpretation.trim() : '';
+  if (!interpretation || body?.entertainmentOnly !== true || AI_ENTERTAINMENT_FORBIDDEN.test(interpretation)) throw new Error('AI interpretation response was not entertainment-only');
+  return interpretation;
 }
 const VALID_SOURCES = new Set(['食堂', '校外', '待确认']);
 export const MENU_OPTIONS = {
@@ -427,6 +461,16 @@ function dateParts(value) {
 function hasUniqueIds(meals) { return new Set(meals.map((meal) => meal.id)).size === meals.length; }
 function cloneRecord(record) { return { ...record, meals: [...record.meals] }; }
 function isRecord(value) { return value !== null && typeof value === 'object' && !Array.isArray(value); }
+function normaliseAiDailyState(dailyState) {
+  const source = isRecord(dailyState) ? dailyState : {};
+  const text = (value, fallback) => typeof value === 'string' && value.trim() ? value.trim() : fallback;
+  return {
+    budget: text(source.budget, '正常'),
+    time: text(source.time, '正常'),
+    fullness: text(source.fullness, '正常'),
+    mood: text(source.mood, '不限'),
+  };
+}
 function hasText(value) { return typeof value === 'string' && value.trim().length > 0; }
 function normaliseRecent(recent) { return Array.isArray(recent) ? recent.filter(isRecord) : []; }
 function recentWithinCalendarDays(records, dateKey, calendarDays) {
@@ -497,6 +541,7 @@ function initialiseCastingInterface() {
   const numberInput = $('#number-input'); const randomButton = $('#random-number-button'); const castButton = $('#cast-button');
   const retryButton = $('#retry-button'); const confirmButton = $('#confirm-button'); const resultCard = $('#result-card');
   const resultEmpty = $('#result-empty'); const resultContent = $('#result-content'); const liveRegion = $('#live-region'); const dateStamp = $('#today-date'); const calendarStatus = $('#calendar-status'); const balanceTip = $('#daily-balance-tip'); const foodLogSlip = $('#food-log-slip'); const recapSummary = $('#recap-summary'); const recapRepeat = $('#recap-repeat'); const recapSuggestions = $('#recap-suggestions');
+  const aiInterpretationPanel = $('#ai-interpretation-panel'); const aiInterpretationStatus = $('#ai-interpretation-status'); const aiInterpretationText = $('#ai-interpretation-text');
   const menuOpenButton = $('#menu-open-button'); const menuCloseButton = $('#menu-close-button'); const menuPanel = $('#menu-panel'); const menuList = $('#menu-list');
   const menuScopeTabs = [...document.querySelectorAll('#menu-scope-tabs [data-menu-scope]')]; const cuisineDirectory = $('#cuisine-directory'); const cuisineDirectorySummary = $('#cuisine-directory-summary'); const mealDetailsTrigger = $('#meal-details-trigger'); const mealEditorPanel = $('#meal-editor-panel');
   const addMealButton = $('#add-meal-button'); const resetMenuButton = $('#reset-menu-button');
@@ -525,6 +570,8 @@ function initialiseCastingInterface() {
   let casting = false;
   let castRevealed = false;
   let castTimers = [];
+  let aiRequestToken = 0;
+  let aiAbortController = null;
   const castElements = [resultCard, numberInput, castButton].filter(Boolean);
   const menuFocusableSelector = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), [href]';
   menuOpenButton.addEventListener('click', () => { menuInvoker = document.activeElement; menuPanel.hidden = false; menuOpenButton.setAttribute('aria-expanded', 'true'); menuCloseButton.focus(); });
@@ -557,6 +604,7 @@ function initialiseCastingInterface() {
   function selectedValue(groupId, fallback) { return document.querySelector(`#${groupId} input:checked`)?.value || fallback; }
   function cast(isRetry) {
     if (casting) return;
+    cancelAiInterpretation();
     const now = new Date();
     const reportNumber = normaliseNumber(); const mealPeriod = selectedValue('meal-period', '午餐'); const place = selectedValue('place', '在学校'); const weather = selectedValue('weather', '自动以本地日期推演');
     const dailyState = { budget: selectedValue('daily-state-budget', '正常'), time: selectedValue('daily-state-time', '正常'), fullness: selectedValue('daily-state-fullness', '正常'), mood: selectedValue('daily-state-mood', '不限') };
@@ -581,6 +629,8 @@ function initialiseCastingInterface() {
     });
     if (!castingRecommendation.meal) { state.rejectedIds = []; announce(castingRecommendation.reason); return; }
     state.selected = { ...castingRecommendation.meal, meals: [...castingRecommendation.meal.meals], reason: castingRecommendation.reason };
+    state.castContext = context;
+    resetAiInterpretation();
     if (prefersReducedMotion()) { showResult(divination, state.selected, reportNumber); return; }
     startCasting();
     for (const { phase, delay } of castingTimeline()) {
@@ -629,6 +679,7 @@ function initialiseCastingInterface() {
     castElements.forEach((element) => { element.classList.remove('is-casting'); delete element.dataset.castPhase; });
   }
   window.addEventListener('pagehide', () => finishCasting({ discardSelection: casting && !castRevealed }));
+  window.addEventListener('pagehide', cancelAiInterpretation);
   function showCastingHexagram(divination) {
     const { calendar, upper, lower, primary } = divination;
     const setText = (id, value) => { const element = $(`#${id}`); if (element) element.textContent = value; };
@@ -675,6 +726,61 @@ function initialiseCastingInterface() {
     renderPracticalRecommendation(meal.recommendation);
     resultCard.classList.remove('is-empty', 'is-revealing'); resultEmpty.hidden = true; resultContent.hidden = false; void resultCard.offsetWidth; resultCard.classList.add('is-revealing');
     announce(`餐卦已显现：${meal.name}，${meal.source}${meal.venue}。`);
+    queueAiInterpretation(divination, meal, state.castContext);
+  }
+  function cancelAiInterpretation() {
+    aiRequestToken += 1;
+    aiAbortController?.abort();
+    aiAbortController = null;
+  }
+  function resetAiInterpretation() {
+    if (!aiInterpretationPanel) return;
+    aiInterpretationPanel.hidden = true;
+    aiInterpretationPanel.classList.remove('is-loading');
+    aiInterpretationPanel.removeAttribute('aria-busy');
+    if (aiInterpretationStatus) aiInterpretationStatus.textContent = '';
+    if (aiInterpretationText) aiInterpretationText.textContent = '';
+  }
+  function queueAiInterpretation(divination, meal, context) {
+    if (!aiInterpretationPanel) return;
+    const payload = buildAiInterpretationPayload({
+      hexagramName: divination?.primary?.name,
+      mealPeriod: context?.mealPeriod,
+      place: context?.place,
+      weather: context?.weather,
+      dailyState: context?.dailyState,
+      recommendation: meal?.reason,
+      dishes: meal?.recommendation?.dishSuggestions ?? meal?.recommendation?.suggestions,
+    });
+    if (!payload) return;
+    const requestToken = aiRequestToken + 1;
+    aiRequestToken = requestToken;
+    aiAbortController = typeof AbortController === 'function' ? new AbortController() : null;
+    const controller = aiAbortController;
+    aiInterpretationPanel.hidden = false;
+    aiInterpretationPanel.classList.add('is-loading');
+    aiInterpretationPanel.setAttribute('aria-busy', 'true');
+    if (aiInterpretationStatus) aiInterpretationStatus.textContent = '正在生成娱乐性补充解读…';
+    if (aiInterpretationText) aiInterpretationText.textContent = '';
+    const timeoutId = window.setTimeout(() => controller?.abort(), AI_INTERPRET_TIMEOUT_MS);
+    requestAiFoodInterpretation(payload, { signal: controller?.signal })
+      .then((interpretation) => {
+        if (requestToken !== aiRequestToken) return;
+        aiInterpretationPanel.classList.remove('is-loading');
+        aiInterpretationPanel.removeAttribute('aria-busy');
+        if (aiInterpretationStatus) aiInterpretationStatus.textContent = 'AI 生成的娱乐性补充解读';
+        if (aiInterpretationText) aiInterpretationText.textContent = interpretation;
+      })
+      .catch(() => {
+        if (requestToken !== aiRequestToken) return;
+        aiInterpretationPanel.classList.remove('is-loading');
+        aiInterpretationPanel.removeAttribute('aria-busy');
+        if (aiInterpretationStatus) aiInterpretationStatus.textContent = 'AI 解读暂不可用；本地卦意与就餐建议仍可直接参考。';
+      })
+      .finally(() => {
+        window.clearTimeout(timeoutId);
+        if (requestToken === aiRequestToken) aiAbortController = null;
+      });
   }
   function renderPracticalRecommendation(recommendation) {
     const container = $('.practical-recommendation');
