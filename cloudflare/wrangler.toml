@@ -1,0 +1,6 @@
+name = "yi-shi-gua-ai"
+main = "src/worker.js"
+compatibility_date = "2026-07-17"
+
+[vars]
+ALLOWED_ORIGIN = "https://whz211417.github.io"
