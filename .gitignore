@@ -6,3 +6,6 @@ artifacts/
 
 # Local browser/editor state
 .DS_Store
+
+# Local Cloudflare Wrangler account/cache state
+cloudflare/.wrangler/
